@@ -76,6 +76,7 @@ class Restaurant(models.Model):  # or BaseModel
     wheelchair_accessible = models.BooleanField(default=False)
     cash_on_delivery = models.BooleanField(default=False)
     pure_veg = models.BooleanField(default=False)
+    cuisines = models.ManyToManyField('Cuisine', related_name='restaurants')
     terms_and_conditions = models.TextField(blank=True)
     closing_message = models.TextField(blank=True)
     cost_for_two = models.DecimalField(max_digits=10, decimal_places=2, default=0)

@@ -37,12 +37,15 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'rest_framework',
+    "corsheaders",
+    "rest_framework",
     "Restaurants"
-    # 'food',/
+    
 ]
 
 MIDDLEWARE = [
+    "corsheaders.middleware.CorsMiddleware",   
+    "django.middleware.common.CommonMiddleware",
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -140,3 +143,33 @@ env = environ.Env()
 environ.Env.read_env(str(BASE_DIR / '.env'))
 
 SECRET_KEY = env.str("SECRET_KEY")
+
+Ip="http://127.0.0.1:5176"
+CORS_ALLOWED_ORIGINS = [
+    "http://127.0.0.1:5173",
+    Ip
+]
+CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_CREDENTIALS = True
+
+import os
+INTERNAL_REGISTER_DB_TOKEN = os.environ.get("INTERNAL_REGISTER_DB_TOKEN")
+
+
+from pathlib import Path
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+MEDIA_URL  = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
+
+from datetime import timedelta
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(days=1),  
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7), 
+    "ROTATE_REFRESH_TOKENS": False,
+    "BLACKLIST_AFTER_ROTATION": True,
+    "ALGORITHM": "HS256",
+    "SIGNING_KEY": SECRET_KEY,
+    "AUTH_HEADER_TYPES": ("Bearer",),
+}
