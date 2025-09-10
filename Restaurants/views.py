@@ -27,7 +27,7 @@ from rest_framework.pagination import PageNumberPagination
 
 from FB.db_router import set_current_tenant, get_current_tenant
 
-from .utils import register_tenant_database
+from .utils import register_tenant_database, ensure_alias_for_client
 from .models import (
     Restaurant, RestaurantSchedule, Blocked_Day, TableBooking, OrderConfigure,
     Cuisine, Category, Item, Customer, RestoCoverImage, RestoMenuImage,
@@ -112,12 +112,12 @@ class RegisterDBByClientAPIView(APIView):
             return Response({"detail": "Provide client_id or client_username."}, status=400)
 
         try:
-            alias = register_tenant_database(
+            alias = ensure_alias_for_client(
                 client_id=int(client_id) if str(client_id).isdigit() else None,
                 client_username=client_username if not client_id else None,
             )
 
-            if settings.DEBUG or str(os.getenv("RESTAURANT_AUTO_MIGRATE", "0")) == "1":
+            if settings.DEBUG or str(os.getenv("ASSET_AUTO_MIGRATE", "0")) == "1":
                 out = StringIO()
                 call_command("migrate", "Restaurants", database=alias, interactive=False, verbosity=1, stdout=out)
                 logger.info("Migrated app 'Restaurants' on %s\n%s", alias, out.getvalue())
@@ -226,6 +226,32 @@ class RestaurantViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, 
             logger.exception("dashboard_stats failed")
             return Response({'error': 'Failed to fetch dashboard statistics'},
                           status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=True, methods=['post'])
+    def add_cuisines(self, request, pk=None):
+        """Add cuisines to a restaurant"""
+        restaurant = self.get_object()
+        cuisine_ids = request.data.get('cuisine_ids', [])
+        
+        try:
+            cuisines = Cuisine.objects.filter(id__in=cuisine_ids)
+            restaurant.cuisines.add(*cuisines)
+            return Response({'status': 'cuisines added'})
+        except Exception as e:
+            return Response({'error': str(e)}, status=400)
+    
+    @action(detail=True, methods=['post'])
+    def set_cuisines(self, request, pk=None):
+        """Set cuisines for a restaurant (replaces existing)"""
+        restaurant = self.get_object()
+        cuisine_ids = request.data.get('cuisine_ids', [])
+        
+        try:
+            cuisines = Cuisine.objects.filter(id__in=cuisine_ids)
+            restaurant.cuisines.set(cuisines)
+            return Response({'status': 'cuisines set'})
+        except Exception as e:
+            return Response({'error': str(e)}, status=400)
 
 class RestaurantScheduleViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _TenantDBMixin, viewsets.ModelViewSet):
     serializer_class = RestaurantScheduleSerializer

@@ -32,17 +32,46 @@ class AliasModelSerializer(AliasContextMixin, serializers.ModelSerializer):
 
 # ================= Core Restaurant Serializers =================
 
-class RestaurantSerializer(AliasModelSerializer):
+class SimpleCuisineSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Cuisine
+        fields = "__all__"
+
+class RestaurantSerializer(serializers.ModelSerializer):
+    # Make many-to-many fields read-only for now
+    cuisines = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
+    
     class Meta:
         model = Restaurant
-        fields = '__all__'
-        read_only_fields = ['id']
-
+        fields = "__all__"
+    
     def create(self, validated_data):
-        obj = Restaurant(**validated_data)
-        obj.full_clean(validate_unique=False)
-        obj.save(using=self.alias)
-        return obj
+        # Extract many-to-many data before creating the instance
+        cuisines_data = validated_data.pop('cuisines', [])
+        
+        # Create the restaurant instance
+        restaurant = Restaurant.objects.create(**validated_data)
+        
+        # Set many-to-many relationships using .set()
+        if cuisines_data:
+            restaurant.cuisines.set(cuisines_data)
+        
+        return restaurant
+    
+    def update(self, instance, validated_data):
+        # Extract many-to-many data before updating
+        cuisines_data = validated_data.pop('cuisines', None)
+        
+        # Update regular fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        
+        # Update many-to-many relationships using .set()
+        if cuisines_data is not None:
+            instance.cuisines.set(cuisines_data)
+        
+        return instance
 
 class RestaurantScheduleSerializer(AliasModelSerializer):
     restaurant = serializers.PrimaryKeyRelatedField(queryset=Restaurant.objects.none())
@@ -131,44 +160,40 @@ class CuisineSerializer(AliasModelSerializer):
         return obj
 
 class CategorySerializer(AliasModelSerializer):
-    cuisine = serializers.PrimaryKeyRelatedField(queryset=Cuisine.objects.none())
-
     class Meta:
         model = Category
-        fields = '__all__'
-        read_only_fields = ['id']
+        fields = "__all__"
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields["cuisine"].queryset = Cuisine.objects.using(self.alias).all()
-
-    def create(self, validated_data):
-        obj = Category(**validated_data)
-        obj.full_clean(validate_unique=False)
-        obj.save(using=self.alias)
-        return obj
-
-class ItemSerializer(AliasModelSerializer):
-    restaurant = serializers.PrimaryKeyRelatedField(queryset=RestaurantSchedule.objects.none())
-    cuisine = serializers.PrimaryKeyRelatedField(queryset=Cuisine.objects.none())
-    category = serializers.PrimaryKeyRelatedField(queryset=Category.objects.none())
-
+class ItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = Item
-        fields = '__all__'
-        read_only_fields = ['id']
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields["restaurant"].queryset = RestaurantSchedule.objects.using(self.alias).all()
-        self.fields["cuisine"].queryset = Cuisine.objects.using(self.alias).all()
-        self.fields["category"].queryset = Category.objects.using(self.alias).all()
-
+        fields = "__all__"
+    
     def create(self, validated_data):
-        obj = Item(**validated_data)
-        obj.full_clean(validate_unique=False)
-        obj.save(using=self.alias)
-        return obj
+        # Handle any many-to-many fields in Item model
+        # Example if Item has tags or categories as M2M:
+        # tags_data = validated_data.pop('tags', [])
+        
+        item = Item.objects.create(**validated_data)
+        
+        # Set M2M relationships:
+        # if tags_data:
+        #     item.tags.set(tags_data)
+        
+        return item
+    
+    def update(self, instance, validated_data):
+        # Handle M2M fields in update too
+        # tags_data = validated_data.pop('tags', None)
+        
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        
+        # if tags_data is not None:
+        #     instance.tags.set(tags_data)
+        
+        return instance
 
 # ================= Customer Serializers =================
 
