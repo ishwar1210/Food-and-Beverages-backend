@@ -94,6 +94,7 @@ class RestaurantSchedule(models.Model):
         ('fri', 'Friday'),
         ('sat', 'Saturday'),
         ('sun', 'Sunday'),
+        ('all', 'All'),
     ]
 
     restaurant = models.OneToOneField(Restaurant, on_delete=models.CASCADE)
