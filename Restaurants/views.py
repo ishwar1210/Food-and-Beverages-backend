@@ -253,12 +253,7 @@ class RestaurantViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, 
         except Exception as e:
             return Response({'error': str(e)}, status=400)
 
-class RestaurantScheduleViewSet(
-    RouterTenantContextMixin,
-    TenantSerializerContextMixin,
-    _TenantDBMixin,
-    viewsets.ModelViewSet
-):
+class RestaurantScheduleViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _TenantDBMixin, viewsets.ModelViewSet):
     serializer_class = RestaurantScheduleSerializer
     permission_classes = [permissions.AllowAny]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
