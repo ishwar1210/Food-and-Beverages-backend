@@ -86,30 +86,38 @@ class Restaurant(models.Model):  # or BaseModel
 
 # ------------------- restaurant details -------------------
 class RestaurantSchedule(models.Model):
-    DAYS_OF_WEEK = [
-        ('mon', 'Monday'),
-        ('tue', 'Tuesday'),
-        ('wed', 'Wednesday'),
-        ('thu', 'Thursday'),
-        ('fri', 'Friday'),
-        ('sat', 'Saturday'),
-        ('sun', 'Sunday'),
-        ('all', 'All'),
+    DAY_CHOICES = [
+        (1, "Monday"),
+        (2, "Tuesday"),
+        (3, "Wednesday"),
+        (4, "Thursday"),
+        (5, "Friday"),
+        (6, "Saturday"),
+        (7, "Sunday"),
     ]
 
-    restaurant = models.OneToOneField(Restaurant, on_delete=models.CASCADE)
-    operational_days = models.JSONField(default=list, blank=True)  # Example: ["mon", "tue", "wed"]
-    start_time = models.TimeField(null=True, blank=True) # Example: 09:00
-    end_time = models.TimeField(null=True, blank=True) # Example: 17:00
-    break_start_time = models.TimeField(null=True, blank=True) # Example: 12:00
-    break_end_time = models.TimeField(null=True, blank=True) # Example: 13:00
+    restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name="schedules")
+    day = models.PositiveSmallIntegerField(choices=DAY_CHOICES)
+    operational = models.BooleanField(default=False)
+
+    start_time = models.TimeField(null=True, blank=True)
+    end_time = models.TimeField(null=True, blank=True)
+    break_start_time = models.TimeField(null=True, blank=True)
+    break_end_time = models.TimeField(null=True, blank=True)
+
     booking_allowed = models.BooleanField(default=False)
     order_allowed = models.BooleanField(default=False)
-    last_booking_time = models.TimeField(null=True, blank=True)
+    last_order_time = models.TimeField(null=True, blank=True)
+
+    class Meta:
+        unique_together = ("restaurant", "day")
+        indexes = [
+            models.Index(fields=["restaurant", "day"]),
+        ]
 
     def __str__(self):
-        days = ", ".join(self.operational_days) if self.operational_days else "No days set"
-        return f"{self.restaurant.restaurant_name} Schedule ({days})"
+        return f"{self.restaurant.name} - {self.get_day_display()}"
+
 
 # ------------------- Blocked Days -------------------
 
@@ -224,6 +232,7 @@ class ItemIngredient(models.Model):
 
     def __str__(self):
         return f"{self.qty} {self.qty_type} of {self.ingredient.name} for {self.item.item_name}"
+        
 # ------------------- Suppliers / Warehouses / UOM -------------------
 class Supplier(models.Model):
     name = models.CharField(max_length=255)

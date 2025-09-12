@@ -38,10 +38,10 @@ from .serializers import (
     RestaurantSerializer, RestaurantScheduleSerializer, BlockedDaySerializer,
     TableBookingSerializer, OrderConfigureSerializer, CuisineSerializer, 
     CategorySerializer, ItemSerializer, CustomerSerializer, RestoCoverImageSerializer,
-    RestoMenuImageSerializer, RestoGalleryImageSerializer, RestoOtherFileSerializer,  # Add this
+    RestoMenuImageSerializer, RestoGalleryImageSerializer, RestoOtherFileSerializer,
     IngredientSerializer, ItemIngredientSerializer, SupplierSerializer, WarehouseSerializer,
     InventoryItemSerializer, InventoryMovementSerializer, OrderSerializer,
-    RestaurantListSerializer, ItemListSerializer
+    RestaurantListSerializer, ItemListSerializer , RestaurantScheduleBulkSerializer
 )
 
 logger = logging.getLogger("restaurant.api")
@@ -253,28 +253,127 @@ class RestaurantViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, 
         except Exception as e:
             return Response({'error': str(e)}, status=400)
 
-class RestaurantScheduleViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _TenantDBMixin, viewsets.ModelViewSet):
+class RestaurantScheduleViewSet(
+    RouterTenantContextMixin,
+    TenantSerializerContextMixin,
+    _TenantDBMixin,
+    viewsets.ModelViewSet
+):
     serializer_class = RestaurantScheduleSerializer
     permission_classes = [permissions.AllowAny]
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
-    filterset_fields = ['restaurant']
-    
-    queryset = RestaurantSchedule.objects.none()  # Add this line
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ["restaurant", "day", "operational"]
+    search_fields = ["restaurant__restaurant_name"]
+    ordering_fields = ["day", "start_time", "end_time", "id"]
+    ordering = ["day"]
+
+    queryset = RestaurantSchedule.objects.none()
 
     def get_queryset(self):
         alias = self._alias()
-        return RestaurantSchedule.objects.using(alias).select_related('restaurant').all()
+        return (
+            RestaurantSchedule.objects.using(alias)
+            .select_related("restaurant")
+            .all()
+        )
 
     def create(self, request, *args, **kwargs):
         alias = self._alias()
-        s = self.get_serializer(data=request.data)
-        s.is_valid(raise_exception=True)
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
         with transaction.atomic(using=alias):
-            obj = RestaurantSchedule(**s.validated_data)
+            obj = RestaurantSchedule(**serializer.validated_data)
             obj.full_clean(validate_unique=False)
             obj.save(using=alias)
-        s.instance = obj
-        return Response(s.data, status=status.HTTP_201_CREATED)
+
+        serializer.instance = obj
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=["get"], url_path="by-restaurant/(?P<restaurant_id>[^/.]+)")
+    def by_restaurant(self, request, restaurant_id=None):
+        """Get full 7-day schedule of a restaurant (ensures missing days are created)."""
+        alias = self._alias()
+
+        # Ensure all 7 days exist
+        for day in range(1, 8):
+            RestaurantSchedule.objects.using(alias).get_or_create(
+                restaurant_id=restaurant_id,
+                day=day,
+                defaults={"operational": False},
+            )
+
+        schedules = (
+            RestaurantSchedule.objects.using(alias)
+            .filter(restaurant_id=restaurant_id)
+            .order_by("day")
+        )
+
+        serializer = self.get_serializer(schedules, many=True)
+        return Response(serializer.data)
+
+class RestaurantScheduleBulkView(
+    RouterTenantContextMixin, TenantSerializerContextMixin, _TenantDBMixin, generics.CreateAPIView
+):
+    serializer_class = RestaurantScheduleBulkSerializer
+    permission_classes = [permissions.AllowAny]
+
+    def create(self, request, *args, **kwargs):
+        s = self.get_serializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        objs = s.save()
+
+        # Response frontend ke liye — har din ka alag record
+        output = [
+            {
+                "day": obj.day,
+                "day_display": obj.get_day_display(),
+                "operational": obj.operational,
+                "start_time": obj.start_time,
+                "end_time": obj.end_time,
+                "break_start_time": obj.break_start_time,
+                "break_end_time": obj.break_end_time,
+                "booking_allowed": obj.booking_allowed,
+                "order_allowed": obj.order_allowed,
+                "last_order_time": obj.last_order_time,
+            }
+            for obj in objs
+        ]
+        return Response(output, status=status.HTTP_201_CREATED)
+
+class RestaurantWeeklyScheduleView(APIView):
+    """
+    Returns 7 rows (Mon-Sun) for a restaurant's schedule.
+    If some days are missing, they will be filled with defaults (blank).
+    """
+    def get(self, request, restaurant_id):
+        # Pehle se existing schedules fetch karo
+        schedules = RestaurantSchedule.objects.filter(restaurant_id=restaurant_id)
+        schedule_map = {s.day: s for s in schedules}  # map day → schedule
+
+        # Default response structure (1-7 = Mon-Sun)
+        days = range(1, 8)
+        output = []
+
+        for day in days:
+            if day in schedule_map:
+                serialized = RestaurantScheduleSerializer(schedule_map[day]).data
+            else:
+                
+                serialized = {
+                    "day": day,
+                    "operational": False,
+                    "start_time": None,
+                    "end_time": None,
+                    "break_start_time": None,
+                    "break_end_time": None,
+                    "booking_allowed": False,
+                    "order_allowed": False,
+                    "last_order_time": None,
+                }
+            output.append(serialized)
+
+        return Response(output, status=status.HTTP_200_OK)
 
 class BlockedDayViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _TenantDBMixin, viewsets.ModelViewSet):
     serializer_class = BlockedDaySerializer
@@ -817,5 +916,4 @@ class RestoOtherFileViewSet(RouterTenantContextMixin, TenantSerializerContextMix
             return Response(serializer.data)
         return Response({"error": "restaurant_id parameter required"}, 
                       status=status.HTTP_400_BAD_REQUEST)
-
 

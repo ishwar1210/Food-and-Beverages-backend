@@ -72,24 +72,47 @@ class RestaurantSerializer(serializers.ModelSerializer):
             instance.cuisines.set(cuisines_data)
         
         return instance
-
 class RestaurantScheduleSerializer(AliasModelSerializer):
-    restaurant = serializers.PrimaryKeyRelatedField(queryset=Restaurant.objects.none())
+    day_display = serializers.CharField(source="get_day_display", read_only=True)
 
     class Meta:
         model = RestaurantSchedule
-        fields = '__all__'
-        read_only_fields = ['id']
+        fields = "__all__"
+
+class RestaurantScheduleBulkSerializer(AliasModelSerializer):
+    restaurant = serializers.PrimaryKeyRelatedField(queryset=Restaurant.objects.none())
+    days = serializers.ListField(
+        child=serializers.IntegerField(min_value=1, max_value=7),
+        write_only=True
+    )
+
+    class Meta:
+        model = RestaurantSchedule
+        fields = [
+            "restaurant", "days", "operational",
+            "start_time", "end_time",
+            "break_start_time", "break_end_time",
+            "booking_allowed", "order_allowed", "last_order_time"
+        ]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["restaurant"].queryset = Restaurant.objects.using(self.alias).all()
 
     def create(self, validated_data):
-        obj = RestaurantSchedule(**validated_data)
-        obj.full_clean(validate_unique=False)
-        obj.save(using=self.alias)
-        return obj
+        restaurant = validated_data.pop("restaurant")
+        days = validated_data.pop("days")
+
+        objs = []
+        for day in days:
+            obj, _ = RestaurantSchedule.objects.using(self.alias).update_or_create(
+                restaurant=restaurant,
+                day=day,
+                defaults=validated_data
+            )
+            objs.append(obj)
+        return objs
+
 
 class BlockedDaySerializer(AliasModelSerializer):
     restaurant = serializers.PrimaryKeyRelatedField(queryset=RestaurantSchedule.objects.none())
