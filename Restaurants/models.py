@@ -40,16 +40,6 @@ class BaseModel(models.Model):
     class Meta:
         abstract = True
 
-    def delete(self, using=None, keep_parents=False, user_id=None):
-        self.is_deleted = True
-        self.deleted_at = timezone.now()
-        if user_id:
-            self.deleted_by_id = user_id
-        self.save(update_fields=["is_deleted", "deleted_at", "deleted_by_id", "updated_at"])
-
-    def hard_delete(self, using=None, keep_parents=False):
-        super().delete(using=using, keep_parents=keep_parents)
-
 
 
 
@@ -57,15 +47,16 @@ class BaseModel(models.Model):
 
 # Create your models here.
 
-class Customer(models.Model):
+class Customer(BaseModel):
     user_id = models.BigIntegerField(null=False, blank=False, unique=True)
+    username = models.CharField(max_length=150, null=True, blank=True)
     loyalty_points = models.IntegerField(default=0)
 
     def __str__(self):
         return f"Customer {self.user_id}"
 
 # -------------------- restaurant basic details --------------------
-class Restaurant(models.Model):  # or BaseModel
+class Restaurant(BaseModel):
     restaurant_name = models.CharField(max_length=100)
     address = models.CharField(max_length=255, blank=False)
     number = models.CharField(max_length=15, blank=False)
@@ -76,7 +67,6 @@ class Restaurant(models.Model):  # or BaseModel
     wheelchair_accessible = models.BooleanField(default=False)
     cash_on_delivery = models.BooleanField(default=False)
     pure_veg = models.BooleanField(default=False)
-    cuisines = models.ManyToManyField('Cuisine', related_name='restaurants')
     terms_and_conditions = models.TextField(blank=True)
     closing_message = models.TextField(blank=True)
     cost_for_two = models.DecimalField(max_digits=10, decimal_places=2, default=0)
@@ -84,8 +74,8 @@ class Restaurant(models.Model):  # or BaseModel
     def __str__(self):
         return self.restaurant_name
 
-# ------------------- restaurant details -------------------
-class RestaurantSchedule(models.Model):
+# ------------------- restaurant details done -------------------
+class RestaurantSchedule(BaseModel):
     DAY_CHOICES = [
         (1, "Monday"),
         (2, "Tuesday"),
@@ -119,9 +109,9 @@ class RestaurantSchedule(models.Model):
         return f"{self.restaurant.name} - {self.get_day_display()}"
 
 
-# ------------------- Blocked Days -------------------
+# ------------------- Blocked Days done  -------------------
 
-class Blocked_Day(models.Model):
+class Blocked_Day(BaseModel):
     BLOCK_TYPE_CHOICES = [
         ('order', 'Order'),
         ('booking', 'Booking'),
@@ -135,8 +125,8 @@ class Blocked_Day(models.Model):
     def __str__(self):
         return f"{self.restaurant.name} - {self.block_type} Blocked from {self.start_date} to {self.end_date}"
 
-# ------------------- table booking ---------------
-class TableBooking(models.Model):
+# ------------------- table booking - done --------------
+class TableBooking(BaseModel):
     restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE)
     no_of_tables = models.IntegerField(default=0)
     min_people = models.IntegerField(default=1)
@@ -145,8 +135,8 @@ class TableBooking(models.Model):
     booking_not_available_text = models.TextField(blank=True)
     no_of_floors = models.IntegerField(default=1)
 
-# ------------------- order configure -------------
-class OrderConfigure(models.Model):
+# ------------------- order configure - done --------------
+class OrderConfigure(BaseModel):
     restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE)
     GST_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0) # example: 5.00
     delivery_charge = models.DecimalField(max_digits=10, decimal_places=2, default=0)
@@ -155,7 +145,7 @@ class OrderConfigure(models.Model):
     order_not_available_text = models.TextField(blank=True)
 
 # ------------------- attachments -------------------
-class RestoCoverImage(models.Model):
+class RestoCoverImage(BaseModel):
     restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE)
     image = models.ImageField(upload_to='resto_cover_images/')
     is_active = models.BooleanField(default=True)
@@ -163,21 +153,21 @@ class RestoCoverImage(models.Model):
     def __str__(self):
         return f"Cover Image for {self.restaurant.name}"
 
-class RestoMenuImage(models.Model):
+class RestoMenuImage(BaseModel):
     restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE)
     image = models.ImageField(upload_to='resto_menu_images/')
 
     def __str__(self):
         return f"Menu Image for {self.restaurant.name}"
 
-class RestoGalleryImage(models.Model):
+class RestoGalleryImage(BaseModel):
     restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE)
     image = models.ImageField(upload_to='resto_gallery_images/')
 
     def __str__(self):
         return f"Gallery Image for {self.restaurant.name}"
 
-class RestoOtherFile(models.Model):
+class RestoOtherFile(BaseModel):
     restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE)
     file = models.FileField(upload_to='resto_other_files/')
 
@@ -206,7 +196,7 @@ class ItemType(models.TextChoices):
     NON_VEG = 'non-veg', 'Non-Veg'
 
 class Item(models.Model):
-    restaurant = models.ForeignKey(RestaurantSchedule, on_delete=models.CASCADE)
+    restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE)
     item_name = models.CharField(max_length=100)
     description = models.TextField()
     price = models.DecimalField(max_digits=10, decimal_places=2)
@@ -217,14 +207,14 @@ class Item(models.Model):
     def __str__(self):
         return self.item_name
 
-# ------------------- ingredients -------------------
-class Ingredient(models.Model):
+# ------------------- ingredients done -------------------
+class Ingredient(BaseModel):
     name = models.CharField(max_length=100)
     def __str__(self):
         return self.name
 
-# ------------------- item ingredients -------------------
-class ItemIngredient(models.Model):
+# ------------------- item ingredients done-------------------
+class ItemIngredient(BaseModel):
     item = models.ForeignKey(Item, on_delete=models.CASCADE)
     ingredient = models.ForeignKey(Ingredient, on_delete=models.CASCADE)
     qty = models.DecimalField(max_digits=10, decimal_places=2)
@@ -232,9 +222,9 @@ class ItemIngredient(models.Model):
 
     def __str__(self):
         return f"{self.qty} {self.qty_type} of {self.ingredient.name} for {self.item.item_name}"
-        
+
 # ------------------- Suppliers / Warehouses / UOM -------------------
-class Supplier(models.Model):
+class Supplier(BaseModel):
     name = models.CharField(max_length=255)
     contact_info = models.TextField(blank=True)
 
@@ -242,7 +232,7 @@ class Supplier(models.Model):
         return self.name
 
 
-class Warehouse(models.Model):
+class Warehouse(BaseModel):
     name = models.CharField(max_length=255)
     restaurant = models.OneToOneField("Restaurant", on_delete=models.CASCADE, null=True, blank=True, related_name="warehouse")
 
@@ -261,7 +251,7 @@ UOM_CHOICES = [
 
 
 # ------------------- Inventory Item (SKU) -------------------
-class InventoryItem(models.Model):
+class InventoryItem(BaseModel):
     sku = models.CharField(max_length=100, unique=True)
     description = models.TextField(blank=True)
     uom = models.CharField(max_length=20, choices=UOM_CHOICES, default='unit')
@@ -310,7 +300,7 @@ MOVEMENT_CHOICES = [
     ('TRANSFER', 'Transfer'),
 ]
 
-class InventoryMovement(models.Model):
+class InventoryMovement(BaseModel):
     item = models.ForeignKey(InventoryItem, on_delete=models.CASCADE, related_name='movements')
     movement_type = models.CharField(max_length=10, choices=MOVEMENT_CHOICES)
     qty = models.DecimalField(max_digits=18, decimal_places=4, validators=[MinValueValidator(0)])
@@ -331,7 +321,7 @@ class InventoryMovement(models.Model):
 
 # -------------------  / Audit / -------------------
 
-class InventoryAudit(models.Model):
+class InventoryAudit(BaseModel):
     action = models.CharField(max_length=100)
     user_id = models.BigIntegerField(null=True, blank=True)
     item = models.ForeignKey(InventoryItem, on_delete=models.SET_NULL, null=True, blank=True)
@@ -370,7 +360,7 @@ def _apply_movement_to_item(sender, instance: InventoryMovement, created, **kwar
 
 # ------------------- orders -------------------
 
-class Order(models.Model):
+class Order(BaseModel):
     PAYMENT_MODE_CHOICES = [
         ('cash', 'Cash'),
         ('Due', 'Due'),

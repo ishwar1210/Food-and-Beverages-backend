@@ -23,7 +23,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.exceptions import ValidationError as DRFValidationError
-from rest_framework.pagination import PageNumberPagination
+from .pagination import StandardResultsSetPagination
 
 from FB.db_router import set_current_tenant, get_current_tenant
 
@@ -171,6 +171,7 @@ class RegisterTenantDatabaseView(APIView):
 
 class RestaurantViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _TenantDBMixin, viewsets.ModelViewSet):
     serializer_class = RestaurantSerializer
+    pagination_class = StandardResultsSetPagination
     permission_classes = [permissions.AllowAny]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['pure_veg', 'serves_alcohol', 'wheelchair_accessible', 'cash_on_delivery']
@@ -255,6 +256,7 @@ class RestaurantViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, 
 
 class RestaurantScheduleViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _TenantDBMixin, viewsets.ModelViewSet):
     serializer_class = RestaurantScheduleSerializer
+    pagination_class = StandardResultsSetPagination
     permission_classes = [permissions.AllowAny]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ["restaurant", "day", "operational"]
@@ -311,6 +313,7 @@ class RestaurantScheduleBulkView(
     RouterTenantContextMixin, TenantSerializerContextMixin, _TenantDBMixin, generics.CreateAPIView
 ):
     serializer_class = RestaurantScheduleBulkSerializer
+    pagination_class = StandardResultsSetPagination
     permission_classes = [permissions.AllowAny]
 
     def create(self, request, *args, **kwargs):
@@ -341,6 +344,7 @@ class RestaurantWeeklyScheduleView(APIView):
     Returns 7 rows (Mon-Sun) for a restaurant's schedule.
     If some days are missing, they will be filled with defaults (blank).
     """
+    pagination_class = StandardResultsSetPagination
     def get(self, request, restaurant_id):
         # Pehle se existing schedules fetch karo
         schedules = RestaurantSchedule.objects.filter(restaurant_id=restaurant_id)
@@ -372,6 +376,7 @@ class RestaurantWeeklyScheduleView(APIView):
 
 class BlockedDayViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _TenantDBMixin, viewsets.ModelViewSet):
     serializer_class = BlockedDaySerializer
+    pagination_class = StandardResultsSetPagination
     permission_classes = [permissions.AllowAny]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     filterset_fields = ['restaurant']  # Remove 'date' from filterset_fields
@@ -395,6 +400,7 @@ class BlockedDayViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, 
 
 class TableBookingViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _TenantDBMixin, viewsets.ModelViewSet):
     serializer_class = TableBookingSerializer
+    pagination_class = StandardResultsSetPagination
     permission_classes = [permissions.AllowAny]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     filterset_fields = ['restaurant']  # Remove 'booking_date', 'is_confirmed'
@@ -428,6 +434,7 @@ class TableBookingViewSet(RouterTenantContextMixin, TenantSerializerContextMixin
 
 class OrderConfigureViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _TenantDBMixin, viewsets.ModelViewSet):
     serializer_class = OrderConfigureSerializer
+    pagination_class = StandardResultsSetPagination
     permission_classes = [permissions.AllowAny]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     filterset_fields = ['restaurant']
@@ -455,6 +462,7 @@ class OrderConfigureViewSet(RouterTenantContextMixin, TenantSerializerContextMix
 
 class CuisineViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _TenantDBMixin, viewsets.ModelViewSet):
     serializer_class = CuisineSerializer
+    pagination_class = StandardResultsSetPagination
     permission_classes = [permissions.AllowAny]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name', 'description']
@@ -480,6 +488,7 @@ class CuisineViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _Te
 
 class CategoryViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _TenantDBMixin, viewsets.ModelViewSet):
     serializer_class = CategorySerializer
+    pagination_class = StandardResultsSetPagination
     permission_classes = [permissions.AllowAny]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['cuisine']
@@ -506,6 +515,7 @@ class CategoryViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _T
 
 class ItemViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _TenantDBMixin, viewsets.ModelViewSet):
     serializer_class = ItemSerializer
+    pagination_class = StandardResultsSetPagination
     permission_classes = [permissions.AllowAny]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['restaurant', 'cuisine', 'category', 'item_type']
@@ -565,6 +575,7 @@ class ItemViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _Tenan
 
 class CustomerViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _TenantDBMixin, viewsets.ModelViewSet):
     serializer_class = CustomerSerializer
+    pagination_class = StandardResultsSetPagination
     permission_classes = [permissions.AllowAny]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['customer_name', 'phone_number', 'email']
@@ -594,6 +605,7 @@ class CustomerViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _T
 
 class OrderViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _TenantDBMixin, viewsets.ModelViewSet):
     serializer_class = OrderSerializer
+    pagination_class = StandardResultsSetPagination
     permission_classes = [permissions.AllowAny]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['restaurant', 'Paid', 'order_type']
@@ -641,6 +653,7 @@ class OrderViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _Tena
 
 class SupplierViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _TenantDBMixin, viewsets.ModelViewSet):
     serializer_class = SupplierSerializer
+    pagination_class = StandardResultsSetPagination
     permission_classes = [permissions.AllowAny]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['supplier_name', 'contact_person', 'phone', 'email']
@@ -666,6 +679,7 @@ class SupplierViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _T
 
 class WarehouseViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _TenantDBMixin, viewsets.ModelViewSet):
     serializer_class = WarehouseSerializer
+    pagination_class = StandardResultsSetPagination
     permission_classes = [permissions.AllowAny]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['restaurant']
@@ -692,6 +706,7 @@ class WarehouseViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _
 
 class InventoryItemViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _TenantDBMixin, viewsets.ModelViewSet):
     serializer_class = InventoryItemSerializer
+    pagination_class = StandardResultsSetPagination
     permission_classes = [permissions.AllowAny]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['category', 'preferred_supplier']
@@ -728,6 +743,7 @@ class InventoryItemViewSet(RouterTenantContextMixin, TenantSerializerContextMixi
 
 class InventoryMovementViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _TenantDBMixin, viewsets.ModelViewSet):
     serializer_class = InventoryMovementSerializer
+    pagination_class = StandardResultsSetPagination
     permission_classes = [permissions.AllowAny]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['item', 'movement_type', 'from_location', 'to_location']
@@ -758,6 +774,7 @@ class InventoryMovementViewSet(RouterTenantContextMixin, TenantSerializerContext
 
 class IngredientViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _TenantDBMixin, viewsets.ModelViewSet):
     serializer_class = IngredientSerializer
+    pagination_class = StandardResultsSetPagination
     permission_classes = [permissions.AllowAny]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['ingredient_name']
@@ -783,6 +800,7 @@ class IngredientViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, 
 
 class ItemIngredientViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _TenantDBMixin, viewsets.ModelViewSet):
     serializer_class = ItemIngredientSerializer
+    pagination_class = StandardResultsSetPagination
     permission_classes = [permissions.AllowAny]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     filterset_fields = ['item', 'ingredient']
@@ -810,6 +828,7 @@ class ItemIngredientViewSet(RouterTenantContextMixin, TenantSerializerContextMix
 
 class RestoCoverImageViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _TenantDBMixin, viewsets.ModelViewSet):
     serializer_class = RestoCoverImageSerializer
+    pagination_class = StandardResultsSetPagination
     permission_classes = [permissions.AllowAny]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['restaurant']
@@ -833,6 +852,7 @@ class RestoCoverImageViewSet(RouterTenantContextMixin, TenantSerializerContextMi
 
 class RestoMenuImageViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _TenantDBMixin, viewsets.ModelViewSet):
     serializer_class = RestoMenuImageSerializer
+    pagination_class = StandardResultsSetPagination
     permission_classes = [permissions.AllowAny]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['restaurant']
@@ -856,6 +876,7 @@ class RestoMenuImageViewSet(RouterTenantContextMixin, TenantSerializerContextMix
 
 class RestoGalleryImageViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _TenantDBMixin, viewsets.ModelViewSet):
     serializer_class = RestoGalleryImageSerializer
+    pagination_class = StandardResultsSetPagination
     permission_classes = [permissions.AllowAny]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['restaurant']
@@ -879,6 +900,7 @@ class RestoGalleryImageViewSet(RouterTenantContextMixin, TenantSerializerContext
 
 class RestoOtherFileViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _TenantDBMixin, viewsets.ModelViewSet):
     serializer_class = RestoOtherFileSerializer
+    pagination_class = StandardResultsSetPagination
     permission_classes = [permissions.AllowAny]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['restaurant']
