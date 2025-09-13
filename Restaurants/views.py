@@ -24,6 +24,7 @@ from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.exceptions import ValidationError as DRFValidationError
 from .pagination import StandardResultsSetPagination
+from rest_framework.parsers import MultiPartParser, FormParser
 
 from FB.db_router import set_current_tenant, get_current_tenant
 
@@ -37,7 +38,7 @@ from .models import (
 from .serializers import (
     RestaurantSerializer, RestaurantScheduleSerializer, BlockedDaySerializer,
     TableBookingSerializer, OrderConfigureSerializer, CuisineSerializer, 
-    CategorySerializer, ItemSerializer, CustomerSerializer, RestoCoverImageSerializer,
+    CategorySerializer, ItemTypeSerializer , ItemSerializer, CustomerSerializer, RestoCoverImageSerializer,
     RestoMenuImageSerializer, RestoGalleryImageSerializer, RestoOtherFileSerializer,
     IngredientSerializer, ItemIngredientSerializer, SupplierSerializer, WarehouseSerializer,
     InventoryItemSerializer, InventoryMovementSerializer, OrderSerializer,
@@ -462,13 +463,12 @@ class OrderConfigureViewSet(RouterTenantContextMixin, TenantSerializerContextMix
 
 class CuisineViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _TenantDBMixin, viewsets.ModelViewSet):
     serializer_class = CuisineSerializer
-    pagination_class = StandardResultsSetPagination
     permission_classes = [permissions.AllowAny]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ['name', 'description']
-    ordering_fields = ['name', 'id']  # Remove 'created_at'
-    ordering = ['name']
-    
+    search_fields = ["name"]
+    ordering_fields = ["name", "id"]
+    ordering = ["name"]
+
     queryset = Cuisine.objects.none()
 
     def get_queryset(self):
@@ -486,21 +486,21 @@ class CuisineViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _Te
         s.instance = obj
         return Response(s.data, status=status.HTTP_201_CREATED)
 
+
 class CategoryViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _TenantDBMixin, viewsets.ModelViewSet):
     serializer_class = CategorySerializer
-    pagination_class = StandardResultsSetPagination
     permission_classes = [permissions.AllowAny]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['cuisine']
-    search_fields = ['name', 'description']
-    ordering_fields = ['name', 'id']  # Remove 'created_at'
-    ordering = ['name']
-    
+    filterset_fields = ["cuisine", "restaurant"]
+    search_fields = ["name"]
+    ordering_fields = ["name", "id"]
+    ordering = ["name"]
+
     queryset = Category.objects.none()
 
     def get_queryset(self):
         alias = self._alias()
-        return Category.objects.using(alias).select_related('cuisine').all()
+        return Category.objects.using(alias).select_related("cuisine", "restaurant").all()
 
     def create(self, request, *args, **kwargs):
         alias = self._alias()
@@ -513,26 +513,42 @@ class CategoryViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _T
         s.instance = obj
         return Response(s.data, status=status.HTTP_201_CREATED)
 
+
+class ItemTypeViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _TenantDBMixin, viewsets.ModelViewSet):
+    serializer_class = ItemTypeSerializer
+    permission_classes = [permissions.AllowAny]
+    queryset = ItemType.objects.none()
+
+    def get_queryset(self):
+        alias = self._alias()
+        return ItemType.objects.using(alias).all()
+
+    def create(self, request, *args, **kwargs):
+        alias = self._alias()
+        s = self.get_serializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        with transaction.atomic(using=alias):
+            obj = ItemType(**s.validated_data)
+            obj.full_clean(validate_unique=False)
+            obj.save(using=alias)
+        s.instance = obj
+        return Response(s.data, status=status.HTTP_201_CREATED)
+
+
 class ItemViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _TenantDBMixin, viewsets.ModelViewSet):
     serializer_class = ItemSerializer
-    pagination_class = StandardResultsSetPagination
     permission_classes = [permissions.AllowAny]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['restaurant', 'cuisine', 'category', 'item_type']
-    search_fields = ['item_name', 'description']
-    ordering_fields = ['item_name', 'price', 'id']  # Remove 'created_at'
-    ordering = ['item_name']
-    
+    filterset_fields = ["restaurant", "cuisine", "category", "item_type"]
+    search_fields = ["item_name", "description"]
+    ordering_fields = ["item_name", "price", "id"]
+    ordering = ["item_name"]
+
     queryset = Item.objects.none()
 
     def get_queryset(self):
         alias = self._alias()
-        return Item.objects.using(alias).select_related('restaurant', 'cuisine', 'category').all()
-
-    def get_serializer_class(self):
-        if self.action == 'list':
-            return ItemListSerializer
-        return ItemSerializer
+        return Item.objects.using(alias).select_related("restaurant", "cuisine", "category", "item_type").all()
 
     def create(self, request, *args, **kwargs):
         alias = self._alias()
@@ -545,29 +561,25 @@ class ItemViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _Tenan
         s.instance = obj
         return Response(s.data, status=status.HTTP_201_CREATED)
 
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=["get"])
     def by_cuisine(self, request):
-        """Filter items by cuisine"""
         alias = self._alias()
-        cuisine_id = request.query_params.get('cuisine_id')
+        cuisine_id = request.query_params.get("cuisine_id")
         if cuisine_id:
             items = Item.objects.using(alias).filter(cuisine_id=cuisine_id)
             serializer = self.get_serializer(items, many=True)
             return Response(serializer.data)
-        return Response({"error": "cuisine_id parameter required"}, 
-                      status=status.HTTP_400_BAD_REQUEST)
+        return Response({"error": "cuisine_id parameter required"}, status=status.HTTP_400_BAD_REQUEST)
 
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=["get"])
     def by_category(self, request):
-        """Filter items by category"""
         alias = self._alias()
-        category_id = request.query_params.get('category_id')
+        category_id = request.query_params.get("category_id")
         if category_id:
             items = Item.objects.using(alias).filter(category_id=category_id)
             serializer = self.get_serializer(items, many=True)
             return Response(serializer.data)
-        return Response({"error": "category_id parameter required"}, 
-                      status=status.HTTP_400_BAD_REQUEST)
+        return Response({"error": "category_id parameter required"}, status=status.HTTP_400_BAD_REQUEST)
 
 # -------------------------------------------------------------------
 # Customer Management ViewSets
@@ -826,14 +838,17 @@ class ItemIngredientViewSet(RouterTenantContextMixin, TenantSerializerContextMix
 # Media Management ViewSets
 # -------------------------------------------------------------------
 
+
+
 class RestoCoverImageViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _TenantDBMixin, viewsets.ModelViewSet):
     serializer_class = RestoCoverImageSerializer
     pagination_class = StandardResultsSetPagination
     permission_classes = [permissions.AllowAny]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['restaurant']
+    parser_classes = [MultiPartParser, FormParser]  # Add this line
     
-    queryset = RestoCoverImage.objects.none()  # Add this line
+    queryset = RestoCoverImage.objects.none()
 
     def get_queryset(self):
         alias = self._alias()
@@ -841,86 +856,132 @@ class RestoCoverImageViewSet(RouterTenantContextMixin, TenantSerializerContextMi
 
     def create(self, request, *args, **kwargs):
         alias = self._alias()
-        s = self.get_serializer(data=request.data)
-        s.is_valid(raise_exception=True)
-        with transaction.atomic(using=alias):
-            obj = RestoCoverImage(**s.validated_data)
-            obj.full_clean(validate_unique=False)
+        # Handle multi-upload for cover images too
+        files = request.FILES.getlist("images") or request.FILES.getlist("image")
+        restaurant_id = request.data.get("restaurant")
+        if not restaurant_id:
+            return Response({"detail": "restaurant required"}, status=400)
+        if not files:
+            return Response({"detail": "No image(s) provided"}, status=400)
+        objs = []
+        for f in files:
+            obj = RestoCoverImage(restaurant_id=restaurant_id, image=f)
             obj.save(using=alias)
-        s.instance = obj
-        return Response(s.data, status=status.HTTP_201_CREATED)
+            objs.append(obj)
+        data = RestoCoverImageSerializer(objs, many=True, context={"alias": alias}).data
+        return Response(data, status=201)
 
+# ------------------- Menu Image -------------------
 class RestoMenuImageViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _TenantDBMixin, viewsets.ModelViewSet):
     serializer_class = RestoMenuImageSerializer
     pagination_class = StandardResultsSetPagination
     permission_classes = [permissions.AllowAny]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['restaurant']
-    
-    queryset = RestoMenuImage.objects.none()  # Add this line
+    parser_classes = [MultiPartParser, FormParser]  # Ensure this line exists
+    queryset = RestoMenuImage.objects.none()
 
     def get_queryset(self):
         alias = self._alias()
-        return RestoMenuImage.objects.using(alias).select_related('restaurant').all()
+        return RestoMenuImage.objects.using(alias).all()
+
+    def get_serializer_context(self):
+        ctx = super().get_serializer_context()
+        ctx["alias"] = self._alias()
+        return ctx
 
     def create(self, request, *args, **kwargs):
         alias = self._alias()
-        s = self.get_serializer(data=request.data)
-        s.is_valid(raise_exception=True)
-        with transaction.atomic(using=alias):
-            obj = RestoMenuImage(**s.validated_data)
-            obj.full_clean(validate_unique=False)
-            obj.save(using=alias)
-        s.instance = obj
-        return Response(s.data, status=status.HTTP_201_CREATED)
+        # Accept field names: images (multi) OR image (single)
+        files = request.FILES.getlist("images")  # preferred multi
+        if not files:
+            files = request.FILES.getlist("image")  # fallback if frontend sends multiple under 'image'
+        restaurant_id = request.data.get("restaurant")
+        if not restaurant_id:
+            return Response({"detail": "restaurant required"}, status=400)
+        if not files:
+            return Response({"detail": "No image(s) provided (use field 'images')"}, status=400)
 
+        # Multi create
+        objs = []
+        for f in files:
+            obj = RestoMenuImage(restaurant_id=restaurant_id, image=f)
+            obj.save(using=alias)
+            objs.append(obj)
+        data = RestoMenuImageSerializer(objs, many=True, context={"alias": alias}).data
+        return Response(data, status=201)
+
+
+# ------------------- Gallery Image -------------------
 class RestoGalleryImageViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _TenantDBMixin, viewsets.ModelViewSet):
     serializer_class = RestoGalleryImageSerializer
     pagination_class = StandardResultsSetPagination
     permission_classes = [permissions.AllowAny]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['restaurant']
-    
-    queryset = RestoGalleryImage.objects.none()  # Add this line
+    parser_classes = [MultiPartParser, FormParser]  # Ensure this line exists
+    queryset = RestoGalleryImage.objects.none()
 
     def get_queryset(self):
         alias = self._alias()
-        return RestoGalleryImage.objects.using(alias).select_related('restaurant').all()
+        return RestoGalleryImage.objects.using(alias).all()
+
+    def get_serializer_context(self):
+        ctx = super().get_serializer_context()
+        ctx["alias"] = self._alias()
+        return ctx
 
     def create(self, request, *args, **kwargs):
         alias = self._alias()
-        s = self.get_serializer(data=request.data)
-        s.is_valid(raise_exception=True)
-        with transaction.atomic(using=alias):
-            obj = RestoGalleryImage(**s.validated_data)
-            obj.full_clean(validate_unique=False)
+        files = request.FILES.getlist("images") or request.FILES.getlist("image")
+        restaurant_id = request.data.get("restaurant")
+        if not restaurant_id:
+            return Response({"detail": "restaurant required"}, status=400)
+        if not files:
+            return Response({"detail": "No image(s) provided"}, status=400)
+        objs = []
+        for f in files:
+            obj = RestoGalleryImage(restaurant_id=restaurant_id, image=f)
             obj.save(using=alias)
-        s.instance = obj
-        return Response(s.data, status=status.HTTP_201_CREATED)
+            objs.append(obj)
+        data = RestoGalleryImageSerializer(objs, many=True, context={"alias": alias}).data
+        return Response(data, status=201)
 
+
+# ------------------- Other File -------------------
 class RestoOtherFileViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _TenantDBMixin, viewsets.ModelViewSet):
     serializer_class = RestoOtherFileSerializer
     pagination_class = StandardResultsSetPagination
     permission_classes = [permissions.AllowAny]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['restaurant']
-    
+    parser_classes = [MultiPartParser, FormParser]  # Ensure this line exists
     queryset = RestoOtherFile.objects.none()
 
     def get_queryset(self):
         alias = self._alias()
-        return RestoOtherFile.objects.using(alias).select_related('restaurant').all()
+        return RestoOtherFile.objects.using(alias).all()
+
+    def get_serializer_context(self):
+        ctx = super().get_serializer_context()
+        ctx["alias"] = self._alias()
+        return ctx
 
     def create(self, request, *args, **kwargs):
         alias = self._alias()
-        s = self.get_serializer(data=request.data)
-        s.is_valid(raise_exception=True)
-        with transaction.atomic(using=alias):
-            obj = RestoOtherFile(**s.validated_data)
-            obj.full_clean(validate_unique=False)
+        files = request.FILES.getlist("files") or request.FILES.getlist("file")
+        restaurant_id = request.data.get("restaurant")
+        if not restaurant_id:
+            return Response({"detail": "restaurant required"}, status=400)
+        if not files:
+            return Response({"detail": "No file(s) provided"}, status=400)
+        objs = []
+        for f in files:
+            obj = RestoOtherFile(restaurant_id=restaurant_id, file=f)
             obj.save(using=alias)
-        s.instance = obj
-        return Response(s.data, status=status.HTTP_201_CREATED)
+            objs.append(obj)
+        data = RestoOtherFileSerializer(objs, many=True, context={"alias": alias}).data
+        return Response(data, status=201)
 
     @action(detail=False, methods=['get'])
     def by_restaurant(self, request):
@@ -932,5 +993,4 @@ class RestoOtherFileViewSet(RouterTenantContextMixin, TenantSerializerContextMix
             serializer = self.get_serializer(files, many=True)
             return Response(serializer.data)
         return Response({"error": "restaurant_id parameter required"}, 
-                      status=status.HTTP_400_BAD_REQUEST)
-
+                        status=status.HTTP_400_BAD_REQUEST)

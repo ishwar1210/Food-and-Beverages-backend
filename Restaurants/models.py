@@ -146,63 +146,97 @@ class OrderConfigure(BaseModel):
 
 # ------------------- attachments -------------------
 class RestoCoverImage(BaseModel):
-    restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE)
+    restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name="cover_images")
     image = models.ImageField(upload_to='resto_cover_images/')
     is_active = models.BooleanField(default=True)
 
     def __str__(self):
-        return f"Cover Image for {self.restaurant.name}"
+        return f"Cover Image for {self.restaurant.restaurant_name}"
 
 class RestoMenuImage(BaseModel):
-    restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE)
+    restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name="menu_images")
     image = models.ImageField(upload_to='resto_menu_images/')
 
     def __str__(self):
-        return f"Menu Image for {self.restaurant.name}"
+        return f"Menu Image for {self.restaurant.restaurant_name}"
 
 class RestoGalleryImage(BaseModel):
-    restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE)
+    restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name="gallery_images")
     image = models.ImageField(upload_to='resto_gallery_images/')
 
     def __str__(self):
-        return f"Gallery Image for {self.restaurant.name}"
+        return f"Gallery Image for {self.restaurant.restaurant_name}"
 
 class RestoOtherFile(BaseModel):
-    restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE)
+    restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name="other_files")
     file = models.FileField(upload_to='resto_other_files/')
 
     def __str__(self):
-        return f"Other File for {self.restaurant.name}"
+        return f"Other File for {self.restaurant.restaurant_name}"
 
 
 
 
-# ------------------- cuisine -------------------
-class Cuisine(models.Model):
+# ------------------- Cuisine -------------------
+class Cuisine(BaseModel):
     name = models.CharField(max_length=100)
+    parent = models.ForeignKey(
+        "self", null=True, blank=True, on_delete=models.SET_NULL, related_name="subcuisines"
+    )
+    restaurant = models.ForeignKey(
+        "Restaurant", on_delete=models.SET_NULL, related_name="cuisines",null=True
+    )
+
+    def __str__(self):
+        if self.parent:
+            return f"{self.parent.name} → {self.name}"
+        return self.name
+
+
+# ------------------- Category -------------------
+class Category(BaseModel):
+    cuisine = models.ForeignKey(
+        Cuisine, on_delete=models.SET_NULL, related_name="categories", null=True, blank=True
+    )
+    restaurant = models.ForeignKey(
+        "Restaurant", on_delete=models.SET_NULL, related_name="categories",null=True
+    )
+    parent = models.ForeignKey(
+        "self", null=True, blank=True, on_delete=models.SET_NULL, related_name="subcategories"
+    )
+    name = models.CharField(max_length=100)
+    timing = models.CharField(max_length=50, blank=True, null=True)
+
     def __str__(self):
         return self.name
 
-# ------------------- category -------------------
-class Category(models.Model):
-    cuisine = models.ForeignKey(Cuisine, on_delete=models.CASCADE)
-    name = models.CharField(max_length=100)
+# ------------------- Item type -------------------
+class ItemType(BaseModel):
+    name = models.CharField(max_length=100, unique=True)
+
     def __str__(self):
         return self.name
 
-# ------------------- item type and item -------------------
-class ItemType(models.TextChoices):
-    VEG = 'veg', 'Veg'
-    NON_VEG = 'non-veg', 'Non-Veg'
+        
+# ------------------- Item -------------------
+class Item(BaseModel):
+    restaurant = models.ForeignKey(
+        "Restaurant", on_delete=models.SET_NULL, related_name="items",null=True
+    )
+    cuisine = models.ForeignKey(
+        Cuisine, on_delete=models.SET_NULL, related_name="items", null=True, blank=True
+    )
+    category = models.ForeignKey(
+        Category, on_delete=models.SET_NULL, related_name="items", null=True, blank=True
+    )
 
-class Item(models.Model):
-    restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE)
     item_name = models.CharField(max_length=100)
-    description = models.TextField()
+    description = models.TextField(blank=True, null=True)
+
     price = models.DecimalField(max_digits=10, decimal_places=2)
-    item_type = models.CharField(max_length=7, choices=ItemType.choices, default=ItemType.VEG)
-    cuisine = models.ForeignKey(Cuisine, on_delete=models.CASCADE)
-    category = models.ForeignKey(Category, on_delete=models.CASCADE)
+    item_type = models.ForeignKey(
+        ItemType, on_delete=models.SET_NULL, related_name="items", null=True, blank=True
+    )
 
     def __str__(self):
         return self.item_name

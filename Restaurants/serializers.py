@@ -173,8 +173,8 @@ class OrderConfigureSerializer(AliasModelSerializer):
 class CuisineSerializer(AliasModelSerializer):
     class Meta:
         model = Cuisine
-        fields = '__all__'
-        read_only_fields = ['id']
+        fields = "__all__"
+        read_only_fields = ["id"]
 
     def create(self, validated_data):
         obj = Cuisine(**validated_data)
@@ -182,40 +182,44 @@ class CuisineSerializer(AliasModelSerializer):
         obj.save(using=self.alias)
         return obj
 
+
 class CategorySerializer(AliasModelSerializer):
     class Meta:
         model = Category
         fields = "__all__"
+        read_only_fields = ["id"]
 
-class ItemSerializer(serializers.ModelSerializer):
+    def create(self, validated_data):
+        obj = Category(**validated_data)
+        obj.full_clean(validate_unique=False)
+        obj.save(using=self.alias)
+        return obj
+
+
+class ItemTypeSerializer(AliasModelSerializer):
+    class Meta:
+        model = ItemType
+        fields = "__all__"
+        read_only_fields = ["id"]
+
+
+class ItemSerializer(AliasModelSerializer):
     class Meta:
         model = Item
         fields = "__all__"
-    
+        read_only_fields = ["id"]
+
     def create(self, validated_data):
-        # Handle any many-to-many fields in Item model
-        # Example if Item has tags or categories as M2M:
-        # tags_data = validated_data.pop('tags', [])
-        
-        item = Item.objects.create(**validated_data)
-        
-        # Set M2M relationships:
-        # if tags_data:
-        #     item.tags.set(tags_data)
-        
-        return item
-    
+        obj = Item(**validated_data)
+        obj.full_clean(validate_unique=False)
+        obj.save(using=self.alias)
+        return obj
+
     def update(self, instance, validated_data):
-        # Handle M2M fields in update too
-        # tags_data = validated_data.pop('tags', None)
-        
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
-        instance.save()
-        
-        # if tags_data is not None:
-        #     instance.tags.set(tags_data)
-        
+        instance.full_clean(validate_unique=False)
+        instance.save(using=self.alias)
         return instance
 
 # ================= Customer Serializers =================
@@ -239,8 +243,8 @@ class RestoCoverImageSerializer(AliasModelSerializer):
 
     class Meta:
         model = RestoCoverImage
-        fields = '__all__'
-        read_only_fields = ['id']
+        fields = ['id', 'restaurant', 'image', 'is_active', 'created_at']
+        read_only_fields = ['id', 'created_at']
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -257,8 +261,8 @@ class RestoMenuImageSerializer(AliasModelSerializer):
 
     class Meta:
         model = RestoMenuImage
-        fields = '__all__'
-        read_only_fields = ['id']
+        fields = ['id', 'restaurant', 'image', 'created_at']
+        read_only_fields = ['id', 'created_at']
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -275,8 +279,8 @@ class RestoGalleryImageSerializer(AliasModelSerializer):
 
     class Meta:
         model = RestoGalleryImage
-        fields = '__all__'
-        read_only_fields = ['id']
+        fields = ['id', 'restaurant', 'image', 'created_at']
+        read_only_fields = ['id', 'created_at']
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -293,8 +297,8 @@ class RestoOtherFileSerializer(AliasModelSerializer):
 
     class Meta:
         model = RestoOtherFile
-        fields = ['id', 'restaurant', 'file']
-        read_only_fields = ['id']
+        fields = ['id', 'restaurant', 'file', 'created_at']
+        read_only_fields = ['id', 'created_at']
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
