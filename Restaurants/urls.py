@@ -8,7 +8,7 @@ from .views import (
     TableBookingViewSet, OrderConfigureViewSet, RestaurantScheduleViewSet, RestaurantScheduleBulkView,
 
     # Menu Management ViewSets
-    CuisineViewSet, CategoryViewSet, ItemViewSet,
+    CuisineViewSet, CategoryViewSet, ItemTypeViewSet, ItemViewSet,
 
     # Customer & Order ViewSets
     CustomerViewSet, OrderViewSet,
@@ -40,6 +40,7 @@ router.register(r'order-configs', OrderConfigureViewSet, basename='order-configu
 # Menu Management endpoints
 router.register(r'cuisines', CuisineViewSet, basename='cuisine')
 router.register(r'categories', CategoryViewSet, basename='category')
+router.register(r'item-types', ItemTypeViewSet, basename='item-type')
 router.register(r'items', ItemViewSet, basename='item')
 
 # Customer & Order endpoints
