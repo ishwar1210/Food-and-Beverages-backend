@@ -8,7 +8,7 @@ from .views import (
     TableBookingViewSet, OrderConfigureViewSet, RestaurantScheduleViewSet, RestaurantScheduleBulkView,
 
     # Menu Management ViewSets
-    CuisineViewSet, CategoryViewSet, ItemTypeViewSet, ItemViewSet,
+    MasterCuisineViewSet, MasterItemViewSet, CuisineViewSet, CategoryViewSet,  ItemViewSet,
 
     # Customer & Order ViewSets
     CustomerViewSet, OrderViewSet,
@@ -17,7 +17,7 @@ from .views import (
     SupplierViewSet, WarehouseViewSet, InventoryItemViewSet, InventoryMovementViewSet,
 
     # Ingredient Management ViewSets
-    IngredientViewSet, ItemIngredientViewSet,
+    IngredientViewSet, QtyIngredientViewSet,
 
     # Media Management ViewSets
     RestoCoverImageViewSet, RestoMenuImageViewSet, RestoGalleryImageViewSet,
@@ -38,9 +38,10 @@ router.register(r'table-bookings', TableBookingViewSet, basename='table-booking'
 router.register(r'order-configs', OrderConfigureViewSet, basename='order-configure')
 
 # Menu Management endpoints
+router.register(r'master-cuisines', MasterCuisineViewSet, basename="mastercuisine")
+router.register(r'master-items', MasterItemViewSet, basename="masteritem")
 router.register(r'cuisines', CuisineViewSet, basename='cuisine')
 router.register(r'categories', CategoryViewSet, basename='category')
-router.register(r'item-types', ItemTypeViewSet, basename='item-type')
 router.register(r'items', ItemViewSet, basename='item')
 
 # Customer & Order endpoints
@@ -55,7 +56,7 @@ router.register(r'inventory-movements', InventoryMovementViewSet, basename='inve
 
 # Ingredient Management endpoints
 router.register(r'ingredients', IngredientViewSet, basename='ingredient')
-router.register(r'item-ingredients', ItemIngredientViewSet, basename='item-ingredient')
+router.register(r'qty-ingredients', QtyIngredientViewSet, basename='qty-ingredient')
 
 # Media Management endpoints
 router.register(r'cover-images', RestoCoverImageViewSet, basename='cover-image')

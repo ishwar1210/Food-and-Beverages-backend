@@ -2,9 +2,9 @@ from rest_framework import serializers
 from rest_framework.validators import UniqueTogetherValidator, UniqueValidator
 from django.db.models import Sum  # Add this import
 from .models import (
-    Restaurant, RestaurantSchedule, Blocked_Day, TableBooking, OrderConfigure,
+    Restaurant, RestaurantSchedule, Blocked_Day, TableBooking, OrderConfigure, MasterCuisine, MasterItem,
     Cuisine, Category, Item, Customer, RestoCoverImage, RestoMenuImage,
-    RestoGalleryImage, RestoOtherFile, ItemType, Ingredient, ItemIngredient,
+    RestoGalleryImage, RestoOtherFile, Ingredient, QtyIngredient,
     Supplier, Warehouse, InventoryItem, InventoryMovement, InventoryAudit, Order
 )
 
@@ -32,46 +32,54 @@ class AliasModelSerializer(AliasContextMixin, serializers.ModelSerializer):
 
 # ================= Core Restaurant Serializers =================
 
-class SimpleCuisineSerializer(serializers.ModelSerializer):
+class SimpleCuisineSerializer(AliasModelSerializer):
     class Meta:
         model = Cuisine
         fields = "__all__"
 
-class RestaurantSerializer(serializers.ModelSerializer):
-    # Make many-to-many fields read-only for now
-    cuisines = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
-    
+class RestaurantSerializer(AliasModelSerializer):
     class Meta:
         model = Restaurant
-        fields = "__all__"
-    
+        fields = [
+            'id',
+            'restaurant_name',
+            'address',
+            'number',
+            'alternative_number',
+            'landline_number',
+            'delivery_time',
+            'serves_alcohol',
+            'wheelchair_accessible',
+            'cash_on_delivery',
+            'pure_veg',
+            'terms_and_conditions',
+            'closing_message',
+            'cost_for_two',
+            'disclaimer',
+
+            #  BaseModel
+            'created_at',
+            'updated_at',
+            'created_by_id',
+            'updated_by_id',
+            'is_active',
+            'is_deleted',
+            'deleted_at',
+            'deleted_by_id',
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at', 'created_by_id', 'updated_by_id']
+
     def create(self, validated_data):
-        # Extract many-to-many data before creating the instance
-        cuisines_data = validated_data.pop('cuisines', [])
-        
-        # Create the restaurant instance
         restaurant = Restaurant.objects.create(**validated_data)
-        
-        # Set many-to-many relationships using .set()
-        if cuisines_data:
-            restaurant.cuisines.set(cuisines_data)
-        
         return restaurant
-    
+
     def update(self, instance, validated_data):
-        # Extract many-to-many data before updating
-        cuisines_data = validated_data.pop('cuisines', None)
-        
-        # Update regular fields
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
-        
-        # Update many-to-many relationships using .set()
-        if cuisines_data is not None:
-            instance.cuisines.set(cuisines_data)
-        
         return instance
+
+
 class RestaurantScheduleSerializer(AliasModelSerializer):
     day_display = serializers.CharField(source="get_day_display", read_only=True)
 
@@ -170,35 +178,30 @@ class OrderConfigureSerializer(AliasModelSerializer):
 
 # ================= Menu Management Serializers =================
 
+class MasterCuisineSerializer(AliasModelSerializer):
+    class Meta:
+        model = MasterCuisine
+        fields = "__all__"
+        read_only_fields = ["id"]
+
+
+class MasterItemSerializer(AliasModelSerializer):
+    class Meta:
+        model = MasterItem
+        fields = "__all__"
+        read_only_fields = ["id"]
+
+
 class CuisineSerializer(AliasModelSerializer):
     class Meta:
         model = Cuisine
         fields = "__all__"
         read_only_fields = ["id"]
 
-    def create(self, validated_data):
-        obj = Cuisine(**validated_data)
-        obj.full_clean(validate_unique=False)
-        obj.save(using=self.alias)
-        return obj
-
 
 class CategorySerializer(AliasModelSerializer):
     class Meta:
         model = Category
-        fields = "__all__"
-        read_only_fields = ["id"]
-
-    def create(self, validated_data):
-        obj = Category(**validated_data)
-        obj.full_clean(validate_unique=False)
-        obj.save(using=self.alias)
-        return obj
-
-
-class ItemTypeSerializer(AliasModelSerializer):
-    class Meta:
-        model = ItemType
         fields = "__all__"
         read_only_fields = ["id"]
 
@@ -209,18 +212,15 @@ class ItemSerializer(AliasModelSerializer):
         fields = "__all__"
         read_only_fields = ["id"]
 
-    def create(self, validated_data):
-        obj = Item(**validated_data)
-        obj.full_clean(validate_unique=False)
-        obj.save(using=self.alias)
-        return obj
-
     def update(self, instance, validated_data):
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.full_clean(validate_unique=False)
         instance.save(using=self.alias)
         return instance
+
+
+
 
 # ================= Customer Serializers =================
 
@@ -324,12 +324,12 @@ class IngredientSerializer(AliasModelSerializer):
         obj.save(using=self.alias)
         return obj
 
-class ItemIngredientSerializer(AliasModelSerializer):
+class QtyIngredientSerializer(AliasModelSerializer):
     item = serializers.PrimaryKeyRelatedField(queryset=Item.objects.none())
     ingredient = serializers.PrimaryKeyRelatedField(queryset=Ingredient.objects.none())
 
     class Meta:
-        model = ItemIngredient
+        model = QtyIngredient
         fields = '__all__'
         read_only_fields = ['id']
 
@@ -339,7 +339,7 @@ class ItemIngredientSerializer(AliasModelSerializer):
         self.fields["ingredient"].queryset = Ingredient.objects.using(self.alias).all()
 
     def create(self, validated_data):
-        obj = ItemIngredient(**validated_data)
+        obj = QtyIngredient(**validated_data)
         obj.full_clean(validate_unique=False)
         obj.save(using=self.alias)
         return obj

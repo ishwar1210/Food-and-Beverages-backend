@@ -70,6 +70,7 @@ class Restaurant(BaseModel):
     terms_and_conditions = models.TextField(blank=True)
     closing_message = models.TextField(blank=True)
     cost_for_two = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    disclaimer = models.TextField(blank=True)
 
     def __str__(self):
         return self.restaurant_name
@@ -176,33 +177,57 @@ class RestoOtherFile(BaseModel):
 
 
 
+# ------------------- Menu Management done  -------------------
 
-# ------------------- Cuisine -------------------
-class Cuisine(BaseModel):
-    name = models.CharField(max_length=100)
-    parent = models.ForeignKey(
-        "self", null=True, blank=True, on_delete=models.SET_NULL, related_name="subcuisines"
-    )
-    restaurant = models.ForeignKey(
-        "Restaurant", on_delete=models.SET_NULL, related_name="cuisines",null=True
-    )
+# ------------------- master data done -------------------
+class MasterCuisine(BaseModel):
+    name = models.CharField(max_length=100, unique=True)
 
     def __str__(self):
-        if self.parent:
-            return f"{self.parent.name} → {self.name}"
         return self.name
 
 
-# ------------------- Category -------------------
+class MasterItem(BaseModel):
+    master_cuisine = models.ForeignKey(
+        MasterCuisine, on_delete=models.CASCADE, related_name="master_items"
+    )
+    name = models.CharField(max_length=100)
+
+    def __str__(self):
+        return f"{self.name} ({self.master_cuisine.name})"
+
+
+# ------------------- Cuisine done-------------------
+class Cuisine(BaseModel):
+    name = models.CharField(max_length=100)
+    restaurant = models.ForeignKey(
+        "Restaurant", on_delete=models.CASCADE, related_name="cuisines"
+    )
+    master_cuisine = models.ForeignKey(
+        MasterCuisine, on_delete=models.CASCADE, related_name="restaurant_cuisines"
+    )
+
+    class Meta:
+        unique_together = ("restaurant", "name")
+
+    def __str__(self):
+        return f"{self.name} - {self.restaurant.name}"
+
+
+# ------------------- Category done-------------------
 class Category(BaseModel):
     cuisine = models.ForeignKey(
-        Cuisine, on_delete=models.SET_NULL, related_name="categories", null=True, blank=True
+        Cuisine, on_delete=models.SET_NULL,
+        related_name="categories", null=True, blank=True
     )
     restaurant = models.ForeignKey(
-        "Restaurant", on_delete=models.SET_NULL, related_name="categories",null=True
+        "Restaurant", on_delete=models.SET_NULL,
+        related_name="categories", null=True
     )
     parent = models.ForeignKey(
-        "self", null=True, blank=True, on_delete=models.SET_NULL, related_name="subcategories"
+        "self", null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name="subcategories"
     )
     name = models.CharField(max_length=100)
     timing = models.CharField(max_length=50, blank=True, null=True)
@@ -210,36 +235,30 @@ class Category(BaseModel):
     def __str__(self):
         return self.name
 
-# ------------------- Item type -------------------
-class ItemType(BaseModel):
-    name = models.CharField(max_length=100, unique=True)
 
-    def __str__(self):
-        return self.name
-
-        
-# ------------------- Item -------------------
+# ------------------- Item done -------------------
 class Item(BaseModel):
     restaurant = models.ForeignKey(
-        "Restaurant", on_delete=models.SET_NULL, related_name="items",null=True
+        "Restaurant", on_delete=models.CASCADE, related_name="items"
     )
     cuisine = models.ForeignKey(
-        Cuisine, on_delete=models.SET_NULL, related_name="items", null=True, blank=True
+        Cuisine, on_delete=models.CASCADE, related_name="items"
     )
-    category = models.ForeignKey(
-        Category, on_delete=models.SET_NULL, related_name="items", null=True, blank=True
+    # optional but recommended to keep mapping with MasterItem
+    master_item = models.ForeignKey(
+        MasterItem, on_delete=models.SET_NULL, null=True, blank=True, related_name="restaurant_items"
     )
-
     item_name = models.CharField(max_length=100)
+    price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     description = models.TextField(blank=True, null=True)
+    item_type = models.CharField(max_length=50, blank=True, null=True)
 
-    price = models.DecimalField(max_digits=10, decimal_places=2)
-    item_type = models.ForeignKey(
-        ItemType, on_delete=models.SET_NULL, related_name="items", null=True, blank=True
-    )
+    class Meta:
+        unique_together = ("restaurant", "item_name")
 
     def __str__(self):
-        return self.item_name
+        return f"{self.item_name} ({self.restaurant.name})"
+
 
 # ------------------- ingredients done -------------------
 class Ingredient(BaseModel):
@@ -248,7 +267,7 @@ class Ingredient(BaseModel):
         return self.name
 
 # ------------------- item ingredients done-------------------
-class ItemIngredient(BaseModel):
+class QtyIngredient(BaseModel):
     item = models.ForeignKey(Item, on_delete=models.CASCADE)
     ingredient = models.ForeignKey(Ingredient, on_delete=models.CASCADE)
     qty = models.DecimalField(max_digits=10, decimal_places=2)
@@ -257,7 +276,7 @@ class ItemIngredient(BaseModel):
     def __str__(self):
         return f"{self.qty} {self.qty_type} of {self.ingredient.name} for {self.item.item_name}"
 
-# ------------------- Suppliers / Warehouses / UOM -------------------
+# ------------------- Suppliers / Warehouses / UOM done -------------------
 class Supplier(BaseModel):
     name = models.CharField(max_length=255)
     contact_info = models.TextField(blank=True)
@@ -284,34 +303,35 @@ UOM_CHOICES = [
 ]
 
 
-# ------------------- Inventory Item (SKU) -------------------
+# ------------------- Inventory Item (SKU) done -------------------
 class InventoryItem(BaseModel):
-    sku = models.CharField(max_length=100, unique=True)
+    name = models.CharField(max_length=255)
+    sku = models.CharField(max_length=100, unique=True) # Stock Keeping Unit shortly barcode
     description = models.TextField(blank=True)
-    uom = models.CharField(max_length=20, choices=UOM_CHOICES, default='unit')
+    uom = models.CharField(max_length=20, choices=UOM_CHOICES, default='unit') # unit of measure for stock
     current_qty = models.DecimalField(max_digits=18, decimal_places=4, default=0, validators=[MinValueValidator(0)])
     last_updated = models.DateTimeField(auto_now=True)
 
     # control fields
     reorder_point = models.DecimalField(max_digits=18, decimal_places=4, default=0)
     safety_stock = models.DecimalField(max_digits=18, decimal_places=4, default=0)
-    lead_time_days = models.IntegerField(default=0)
-    eoq = models.DecimalField(max_digits=18, decimal_places=4, default=0)
+    #lead_time_days = models.IntegerField(default=0)
+    eoq = models.DecimalField(max_digits=18, decimal_places=4, default=0) # Economic Order Quantity
     preferred_supplier = models.ForeignKey(Supplier, on_delete=models.SET_NULL, null=True, blank=True)
 
     # stock management
-    category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True)
+    #category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True)
     bin_location = models.CharField(max_length=100, blank=True)
-    serialized = models.BooleanField(default=False)
+    #serialized = models.BooleanField(default=False)
     expiry_date = models.DateField(null=True, blank=True)
 
     # advanced / analytics
     valuation = models.DecimalField(max_digits=20, decimal_places=2, default=0)
     stock_turnover_rate = models.DecimalField(max_digits=8, decimal_places=4, default=0)
     forecast = models.DecimalField(max_digits=18, decimal_places=4, default=0)
-    ml_model_version = models.CharField(max_length=50, blank=True)
+    #ml_model_version = models.CharField(max_length=50, blank=True)
     barcode_status = models.BooleanField(default=False)
-    rfid_tag_id = models.CharField(max_length=100, blank=True)
+    #rfid_tag_id = models.CharField(max_length=100, blank=True)
 
     def __str__(self):
         return f"{self.sku} - {self.description or 'Item'}"
@@ -327,7 +347,7 @@ class InventoryItem(BaseModel):
         self.save(update_fields=['current_qty', 'last_updated'])
 
 
-# ------------------- Inventory Movement / Transfer -------------------
+# ------------------- Inventory Movement / Transfer done-------------------
 MOVEMENT_CHOICES = [
     ('IN', 'Stock In'),
     ('OUT', 'Stock Out'),
@@ -339,33 +359,33 @@ class InventoryMovement(BaseModel):
     movement_type = models.CharField(max_length=10, choices=MOVEMENT_CHOICES)
     qty = models.DecimalField(max_digits=18, decimal_places=4, validators=[MinValueValidator(0)])
     uom = models.CharField(max_length=20, choices=UOM_CHOICES, default='unit')
-    from_location = models.ForeignKey(Warehouse, on_delete=models.SET_NULL, null=True, blank=True, related_name='movements_from')
-    to_location = models.ForeignKey(Warehouse, on_delete=models.SET_NULL, null=True, blank=True, related_name='movements_to')
-    transfer_order_number = models.CharField(max_length=100, blank=True)
-    ship_date = models.DateField(null=True, blank=True)
-    receive_date = models.DateField(null=True, blank=True)
-    batch_serial_number = models.CharField(max_length=200, blank=True)
-    inspection_status = models.CharField(max_length=50, blank=True)
+    #from_location = models.ForeignKey(Warehouse, on_delete=models.SET_NULL, null=True, blank=True, related_name='movements_from')
+    #to_location = models.ForeignKey(Warehouse, on_delete=models.SET_NULL, null=True, blank=True, related_name='movements_to')
+    #transfer_order_number = models.CharField(max_length=100, blank=True)
+    #ship_date = models.DateField(null=True, blank=True)
+    #receive_date = models.DateField(null=True, blank=True)
+    #batch_serial_number = models.CharField(max_length=200, blank=True)
+    #inspection_status = models.CharField(max_length=50, blank=True)
     remarks = models.TextField(blank=True)
-    timestamp = models.DateTimeField(auto_now_add=True)
+    #timestamp = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.movement_type} {self.qty} {self.uom} - {self.item.sku} @ {self.timestamp}"
+        return f"{self.movement_type} {self.qty} {self.uom} - {self.item.sku} @ {self.created_at}"
 
 
-# -------------------  / Audit / -------------------
+# -------------------  / Audit / done-------------------
 
 class InventoryAudit(BaseModel):
     action = models.CharField(max_length=100)
-    user_id = models.BigIntegerField(null=True, blank=True)
+    #user_id = models.BigIntegerField(null=True, blank=True)
     item = models.ForeignKey(InventoryItem, on_delete=models.SET_NULL, null=True, blank=True)
     qty_before = models.DecimalField(max_digits=18, decimal_places=4, null=True, blank=True)
     qty_after = models.DecimalField(max_digits=18, decimal_places=4, null=True, blank=True)
-    timestamp = models.DateTimeField(auto_now_add=True)
-    details = models.TextField(blank=True)
+   # timestamp = models.DateTimeField(auto_now_add=True)
+    #details = models.TextField(blank=True)
 
 
-# ------------------- Signals: keep InventoryItem.current_qty in sync -------------------
+# ------------------- Signals: keep InventoryItem.current_qty in sync done-------------------
 @receiver(post_save, sender=InventoryMovement)
 def _apply_movement_to_item(sender, instance: InventoryMovement, created, **kwargs):
     if not created:

@@ -30,17 +30,17 @@ from FB.db_router import set_current_tenant, get_current_tenant
 
 from .utils import register_tenant_database, ensure_alias_for_client
 from .models import (
-    Restaurant, RestaurantSchedule, Blocked_Day, TableBooking, OrderConfigure,
+    Restaurant, RestaurantSchedule, Blocked_Day, TableBooking, OrderConfigure, MasterCuisine, MasterItem,
     Cuisine, Category, Item, Customer, RestoCoverImage, RestoMenuImage,
-    RestoGalleryImage, RestoOtherFile, ItemType, Ingredient, ItemIngredient,
+    RestoGalleryImage, RestoOtherFile,  Ingredient, QtyIngredient,
     Supplier, Warehouse, InventoryItem, InventoryMovement, InventoryAudit, Order
 )
 from .serializers import (
     RestaurantSerializer, RestaurantScheduleSerializer, BlockedDaySerializer,
-    TableBookingSerializer, OrderConfigureSerializer, CuisineSerializer, 
-    CategorySerializer, ItemTypeSerializer , ItemSerializer, CustomerSerializer, RestoCoverImageSerializer,
+    TableBookingSerializer, OrderConfigureSerializer, MasterCuisineSerializer, MasterItemSerializer, CuisineSerializer,
+    CategorySerializer,  ItemSerializer, CustomerSerializer, RestoCoverImageSerializer,
     RestoMenuImageSerializer, RestoGalleryImageSerializer, RestoOtherFileSerializer,
-    IngredientSerializer, ItemIngredientSerializer, SupplierSerializer, WarehouseSerializer,
+    IngredientSerializer, QtyIngredientSerializer, SupplierSerializer, WarehouseSerializer,
     InventoryItemSerializer, InventoryMovementSerializer, OrderSerializer,
     RestaurantListSerializer, ItemListSerializer , RestaurantScheduleBulkSerializer
 )
@@ -170,16 +170,16 @@ class RegisterTenantDatabaseView(APIView):
 # Core Restaurant ViewSets
 # -------------------------------------------------------------------
 
-class RestaurantViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _TenantDBMixin, viewsets.ModelViewSet):
+class RestaurantViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _TenantDBMixin, viewsets.ModelViewSet ):
     serializer_class = RestaurantSerializer
     pagination_class = StandardResultsSetPagination
     permission_classes = [permissions.AllowAny]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['pure_veg', 'serves_alcohol', 'wheelchair_accessible', 'cash_on_delivery']
     search_fields = ['restaurant_name', 'address', 'number']
-    ordering_fields = ['restaurant_name', 'cost_for_two', 'id']  # Remove 'created_at'
-    ordering = ['-id']  # Order by id instead of created_at
-    
+    ordering_fields = ['restaurant_name', 'cost_for_two', 'id']
+    ordering = ['-id']
+
     queryset = Restaurant.objects.none()
 
     def get_queryset(self):
@@ -190,6 +190,20 @@ class RestaurantViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, 
         if self.action == 'list':
             return RestaurantListSerializer
         return RestaurantSerializer
+
+    def perform_create(self, serializer):
+        alias = self._alias()
+        serializer.save(
+            created_by_id=self.request.user.id if self.request.user.is_authenticated else None,
+            using=alias
+    )
+
+    def perform_update(self, serializer):
+        alias = self._alias()
+        serializer.save(
+            updated_by_id=self.request.user.id if self.request.user.is_authenticated else None,
+            using=alias
+    )
 
     def create(self, request, *args, **kwargs):
         alias = self._alias()
@@ -204,9 +218,9 @@ class RestaurantViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, 
 
     @action(detail=False, methods=['get'])
     def active(self, request):
-        """Get restaurants (no active field exists)"""
+        """Get restaurants (no active field exists now)"""
         alias = self._alias()
-        restaurants = Restaurant.objects.using(alias).all()  # Remove status filter
+        restaurants = Restaurant.objects.using(alias).all()
         serializer = self.get_serializer(restaurants, many=True)
         return Response(serializer.data)
 
@@ -217,7 +231,7 @@ class RestaurantViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, 
             total_restaurants = Restaurant.objects.using(alias).count()
             total_orders = Order.objects.using(alias).count()
             pending_orders = Order.objects.using(alias).filter(Paid=False).count()
-            
+
             return Response({
                 'total_restaurants': total_restaurants,
                 'total_orders': total_orders,
@@ -226,34 +240,11 @@ class RestaurantViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, 
             })
         except Exception:
             logger.exception("dashboard_stats failed")
-            return Response({'error': 'Failed to fetch dashboard statistics'},
-                          status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {'error': 'Failed to fetch dashboard statistics'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
-    @action(detail=True, methods=['post'])
-    def add_cuisines(self, request, pk=None):
-        """Add cuisines to a restaurant"""
-        restaurant = self.get_object()
-        cuisine_ids = request.data.get('cuisine_ids', [])
-        
-        try:
-            cuisines = Cuisine.objects.filter(id__in=cuisine_ids)
-            restaurant.cuisines.add(*cuisines)
-            return Response({'status': 'cuisines added'})
-        except Exception as e:
-            return Response({'error': str(e)}, status=400)
-    
-    @action(detail=True, methods=['post'])
-    def set_cuisines(self, request, pk=None):
-        """Set cuisines for a restaurant (replaces existing)"""
-        restaurant = self.get_object()
-        cuisine_ids = request.data.get('cuisine_ids', [])
-        
-        try:
-            cuisines = Cuisine.objects.filter(id__in=cuisine_ids)
-            restaurant.cuisines.set(cuisines)
-            return Response({'status': 'cuisines set'})
-        except Exception as e:
-            return Response({'error': str(e)}, status=400)
 
 class RestaurantScheduleViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _TenantDBMixin, viewsets.ModelViewSet):
     serializer_class = RestaurantScheduleSerializer
@@ -461,6 +452,35 @@ class OrderConfigureViewSet(RouterTenantContextMixin, TenantSerializerContextMix
 # Menu Management ViewSets
 # -------------------------------------------------------------------
 
+class MasterCuisineViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _TenantDBMixin, viewsets.ModelViewSet):
+    serializer_class = MasterCuisineSerializer
+    permission_classes = [permissions.AllowAny]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ["name"]
+    ordering_fields = ["name", "id"]
+    ordering = ["name"]
+    queryset = MasterCuisine.objects.none()
+
+    def get_queryset(self):
+        alias = self._alias()
+        return MasterCuisine.objects.using(alias).all()
+
+
+class MasterItemViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _TenantDBMixin, viewsets.ModelViewSet):
+    serializer_class = MasterItemSerializer
+    permission_classes = [permissions.AllowAny]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ["master_cuisine"]
+    search_fields = ["name"]
+    ordering_fields = ["name", "id"]
+    ordering = ["name"]
+    queryset = MasterItem.objects.none()
+
+    def get_queryset(self):
+        alias = self._alias()
+        return MasterItem.objects.using(alias).select_related("master_cuisine").all()
+
+
 class CuisineViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _TenantDBMixin, viewsets.ModelViewSet):
     serializer_class = CuisineSerializer
     permission_classes = [permissions.AllowAny]
@@ -468,23 +488,32 @@ class CuisineViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _Te
     search_fields = ["name"]
     ordering_fields = ["name", "id"]
     ordering = ["name"]
-
     queryset = Cuisine.objects.none()
 
     def get_queryset(self):
         alias = self._alias()
-        return Cuisine.objects.using(alias).all()
+        return Cuisine.objects.using(alias).select_related("restaurant", "master_cuisine").all()
 
-    def create(self, request, *args, **kwargs):
+    def perform_create(self, serializer):
         alias = self._alias()
-        s = self.get_serializer(data=request.data)
-        s.is_valid(raise_exception=True)
-        with transaction.atomic(using=alias):
-            obj = Cuisine(**s.validated_data)
-            obj.full_clean(validate_unique=False)
-            obj.save(using=alias)
-        s.instance = obj
-        return Response(s.data, status=status.HTTP_201_CREATED)
+        cuisine = serializer.save()
+
+        # Get all master items for this cuisine
+        master_items = MasterItem.objects.using(alias).filter(master_cuisine=cuisine.master_cuisine)
+
+        # Bulk create restaurant items from master items
+        items_to_create = [
+            Item(
+                restaurant=cuisine.restaurant,
+                cuisine=cuisine,
+                master_item=m_item,
+                item_name=m_item.name,
+                price=0,  # default price, can be updated later
+            )
+            for m_item in master_items
+        ]
+        if items_to_create:
+            Item.objects.using(alias).bulk_create(items_to_create)
 
 
 class CategoryViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _TenantDBMixin, viewsets.ModelViewSet):
@@ -495,71 +524,26 @@ class CategoryViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _T
     search_fields = ["name"]
     ordering_fields = ["name", "id"]
     ordering = ["name"]
-
     queryset = Category.objects.none()
 
     def get_queryset(self):
         alias = self._alias()
-        return Category.objects.using(alias).select_related("cuisine", "restaurant").all()
-
-    def create(self, request, *args, **kwargs):
-        alias = self._alias()
-        s = self.get_serializer(data=request.data)
-        s.is_valid(raise_exception=True)
-        with transaction.atomic(using=alias):
-            obj = Category(**s.validated_data)
-            obj.full_clean(validate_unique=False)
-            obj.save(using=alias)
-        s.instance = obj
-        return Response(s.data, status=status.HTTP_201_CREATED)
-
-
-class ItemTypeViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _TenantDBMixin, viewsets.ModelViewSet):
-    serializer_class = ItemTypeSerializer
-    permission_classes = [permissions.AllowAny]
-    queryset = ItemType.objects.none()
-
-    def get_queryset(self):
-        alias = self._alias()
-        return ItemType.objects.using(alias).all()
-
-    def create(self, request, *args, **kwargs):
-        alias = self._alias()
-        s = self.get_serializer(data=request.data)
-        s.is_valid(raise_exception=True)
-        with transaction.atomic(using=alias):
-            obj = ItemType(**s.validated_data)
-            obj.full_clean(validate_unique=False)
-            obj.save(using=alias)
-        s.instance = obj
-        return Response(s.data, status=status.HTTP_201_CREATED)
+        return Category.objects.using(alias).select_related("cuisine", "restaurant", "parent").all()
 
 
 class ItemViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _TenantDBMixin, viewsets.ModelViewSet):
     serializer_class = ItemSerializer
     permission_classes = [permissions.AllowAny]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ["restaurant", "cuisine", "category", "item_type"]
+    filterset_fields = ["restaurant", "cuisine", "category", "item_type", "master_item"]
     search_fields = ["item_name", "description"]
     ordering_fields = ["item_name", "price", "id"]
     ordering = ["item_name"]
-
     queryset = Item.objects.none()
 
     def get_queryset(self):
         alias = self._alias()
-        return Item.objects.using(alias).select_related("restaurant", "cuisine", "category", "item_type").all()
-
-    def create(self, request, *args, **kwargs):
-        alias = self._alias()
-        s = self.get_serializer(data=request.data)
-        s.is_valid(raise_exception=True)
-        with transaction.atomic(using=alias):
-            obj = Item(**s.validated_data)
-            obj.full_clean(validate_unique=False)
-            obj.save(using=alias)
-        s.instance = obj
-        return Response(s.data, status=status.HTTP_201_CREATED)
+        return Item.objects.using(alias).select_related("restaurant", "cuisine", "master_item").all()
 
     @action(detail=False, methods=["get"])
     def by_cuisine(self, request):
@@ -810,25 +794,25 @@ class IngredientViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, 
         s.instance = obj
         return Response(s.data, status=status.HTTP_201_CREATED)
 
-class ItemIngredientViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _TenantDBMixin, viewsets.ModelViewSet):
-    serializer_class = ItemIngredientSerializer
+class QtyIngredientViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _TenantDBMixin, viewsets.ModelViewSet):
+    serializer_class = QtyIngredientSerializer
     pagination_class = StandardResultsSetPagination
     permission_classes = [permissions.AllowAny]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     filterset_fields = ['item', 'ingredient']
     
-    queryset = ItemIngredient.objects.none()
+    queryset = QtyIngredient.objects.none()
 
     def get_queryset(self):
         alias = self._alias()
-        return ItemIngredient.objects.using(alias).select_related('item', 'ingredient').all()
+        return QtyIngredient.objects.using(alias).select_related('item', 'ingredient').all()
 
     def create(self, request, *args, **kwargs):
         alias = self._alias()
         s = self.get_serializer(data=request.data)
         s.is_valid(raise_exception=True)
         with transaction.atomic(using=alias):
-            obj = ItemIngredient(**s.validated_data)
+            obj = QtyIngredient(**s.validated_data)
             obj.full_clean(validate_unique=False)
             obj.save(using=alias)
         s.instance = obj
