@@ -482,3 +482,24 @@ class ItemListSerializer(serializers.ModelSerializer):
             'cuisine_name', 'category_name', 'restaurant_name'
         ]
 
+# ----------------------------------------------
+class ItemNestedSerializer(AliasModelSerializer):
+    class Meta:
+        model = Item
+        fields = ["id", "item_name", "price", "description", "item_type"]
+
+
+class CategoryNestedSerializer(AliasModelSerializer):
+    items = ItemNestedSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Category
+        fields = ["id", "name", "timing", "items"]
+
+
+class CuisineNestedSerializer(AliasModelSerializer):
+    categories = CategoryNestedSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Cuisine
+        fields = ["id", "name", "categories"]

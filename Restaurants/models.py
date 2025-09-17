@@ -192,6 +192,7 @@ class MasterItem(BaseModel):
         MasterCuisine, on_delete=models.CASCADE, related_name="master_items"
     )
     name = models.CharField(max_length=100)
+    item_type = models.CharField(max_length=50, blank=False, null=False) # veg, non-veg, egg
 
     def __str__(self):
         return f"{self.name} ({self.master_cuisine.name})"
@@ -208,7 +209,7 @@ class Cuisine(BaseModel):
     )
 
     class Meta:
-        unique_together = ("restaurant", "name")
+        unique_together = ("restaurant","name")
 
     def __str__(self):
         return f"{self.name} - {self.restaurant.name}"
@@ -248,10 +249,14 @@ class Item(BaseModel):
     master_item = models.ForeignKey(
         MasterItem, on_delete=models.SET_NULL, null=True, blank=True, related_name="restaurant_items"
     )
+    category = models.ForeignKey(
+        Category, on_delete=models.SET_NULL, null=True, blank=True, related_name="items"
+    )
     item_name = models.CharField(max_length=100)
+    master_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     description = models.TextField(blank=True, null=True)
-    item_type = models.CharField(max_length=50, blank=True, null=True)
+    item_type = models.CharField(max_length=50, blank=False, null=False) # veg, non-veg, egg
 
     class Meta:
         unique_together = ("restaurant", "item_name")

@@ -3,6 +3,7 @@ import json
 import logging
 from django.db.models import Q, Count, Sum, Min, F  # Add F here
 
+from django.db.models import Prefetch
 import os
 import traceback
 from io import StringIO
@@ -42,7 +43,7 @@ from .serializers import (
     RestoMenuImageSerializer, RestoGalleryImageSerializer, RestoOtherFileSerializer,
     IngredientSerializer, QtyIngredientSerializer, SupplierSerializer, WarehouseSerializer,
     InventoryItemSerializer, InventoryMovementSerializer, OrderSerializer,
-    RestaurantListSerializer, ItemListSerializer , RestaurantScheduleBulkSerializer
+    RestaurantListSerializer, ItemListSerializer , RestaurantScheduleBulkSerializer, CuisineNestedSerializer
 )
 
 logger = logging.getLogger("restaurant.api")
@@ -508,7 +509,9 @@ class CuisineViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _Te
                 cuisine=cuisine,
                 master_item=m_item,
                 item_name=m_item.name,
-                price=0,  # default price, can be updated later
+                price=0,# default price, can be updated later
+                master_price=0, # default price, can be updated later
+                item_type=m_item.item_type  # default type, can be updated later
             )
             for m_item in master_items
         ]
@@ -543,7 +546,22 @@ class ItemViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _Tenan
 
     def get_queryset(self):
         alias = self._alias()
-        return Item.objects.using(alias).select_related("restaurant", "cuisine", "master_item").all()
+        qs = Item.objects.using(alias).select_related(
+            "restaurant", "cuisine", "master_item", "category"
+        ).all()
+
+        # Filter by restaurant and pure_veg logic
+        restaurant_id = self.request.query_params.get("restaurant")
+        if restaurant_id:
+            try:
+                restaurant = Restaurant.objects.using(alias).get(pk=restaurant_id)
+                if restaurant.pure_veg:
+                    qs = qs.filter(restaurant_id=restaurant_id, master_item__is_veg=True)
+                else:
+                    qs = qs.filter(restaurant_id=restaurant_id)
+            except Restaurant.DoesNotExist:
+                qs = qs.none()
+        return qs
 
     @action(detail=False, methods=["get"])
     def by_cuisine(self, request):
@@ -978,3 +996,44 @@ class RestoOtherFileViewSet(RouterTenantContextMixin, TenantSerializerContextMix
             return Response(serializer.data)
         return Response({"error": "restaurant_id parameter required"}, 
                         status=status.HTTP_400_BAD_REQUEST)
+
+# -------------------------------------------------------------------
+class CuisineViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _TenantDBMixin, viewsets.ModelViewSet): 
+    serializer_class = CuisineSerializer
+    permission_classes = [permissions.AllowAny]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ["name"]
+    ordering_fields = ["name", "id"]
+    ordering = ["name"]
+    queryset = Cuisine.objects.none()
+
+    def get_queryset(self):
+        alias = self._alias()
+        return Cuisine.objects.using(alias).select_related("restaurant", "master_cuisine").all()
+
+    def perform_create(self, serializer):
+        alias = self._alias()
+        cuisine = serializer.save()
+        master_items = MasterItem.objects.using(alias).filter(master_cuisine=cuisine.master_cuisine)
+        items_to_create = [
+            Item(
+                restaurant=cuisine.restaurant,
+                cuisine=cuisine,
+                master_item=m_item,
+                item_name=m_item.name,
+                price=0,
+            )
+            for m_item in master_items
+        ]
+        if items_to_create:
+            Item.objects.using(alias).bulk_create(items_to_create)
+
+    # 🔹 Custom nested API
+    @action(detail=False, methods=["get"])
+    def with_categories_items(self, request):
+        alias = self._alias()
+        cuisines = Cuisine.objects.using(alias).prefetch_related(
+            Prefetch("categories", queryset=Category.objects.using(alias).prefetch_related("items"))
+        )
+        serializer = CuisineNestedSerializer(cuisines, many=True)
+        return Response(serializer.data)
