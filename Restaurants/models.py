@@ -2,9 +2,8 @@ from django.db import models
 from django.utils import timezone
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+from django.core.validators import MinValueValidator, MaxValueValidator
 from django.db import transaction
-from django.core.validators import MinValueValidator
-
 
 # ---------------- Base (soft delete + audit) ----------------
 class ActiveManager(models.Manager):
@@ -48,12 +47,14 @@ class BaseModel(models.Model):
 # Create your models here.
 
 class Customer(BaseModel):
-    user_id = models.BigIntegerField(null=False, blank=False, unique=True)
-    username = models.CharField(max_length=150, null=True, blank=True)
+    customer_name = models.CharField(max_length=150, null=True, blank=True)
+    number = models.CharField(max_length=15, blank=False)
+    address = models.CharField(max_length=255, blank=False)
+    locality = models.CharField(max_length=100, blank=True)
     loyalty_points = models.IntegerField(default=0)
 
     def __str__(self):
-        return f"Customer {self.user_id}"
+        return f"Customer {self.customer_name}"
 
 # -------------------- restaurant basic details --------------------
 class Restaurant(BaseModel):
@@ -136,6 +137,29 @@ class TableBooking(BaseModel):
     booking_not_available_text = models.TextField(blank=True)
     no_of_floors = models.IntegerField(default=1)
 
+class tablebookingfloor(BaseModel):
+    restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE)
+    floor_name = models.CharField(max_length=100)
+    no_of_tables = models.IntegerField(default=0)
+
+class Table(BaseModel):
+    Booking_Status_Choices = [
+        ('available', 'Available'),
+        ('booked', 'Booked'),
+        ('occupied', 'Occupied'),
+    ]
+    restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE)
+    floor = models.ForeignKey(tablebookingfloor, on_delete=models.CASCADE, null=True, blank=True)
+    status = models.CharField(max_length=50,choices=Booking_Status_Choices)
+
+class TableBookingLog(BaseModel):
+    restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE)
+    table = models.ForeignKey(Table, on_delete=models.CASCADE)
+    customer = models.ForeignKey(Customer, on_delete=models.CASCADE)
+    no_of_people = models.IntegerField(default=1)
+    start_time = models.DateTimeField()
+    end_time = models.DateTimeField()
+
 # ------------------- order configure - done --------------
 class OrderConfigure(BaseModel):
     restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE)
@@ -217,9 +241,10 @@ class Cuisine(BaseModel):
 
 # ------------------- Category done-------------------
 class Category(BaseModel):
-    cuisine = models.ForeignKey(
-        Cuisine, on_delete=models.SET_NULL,
-        related_name="categories", null=True, blank=True
+    cuisines = models.ManyToManyField(
+        Cuisine,
+        related_name="categories",
+        blank=True
     )
     restaurant = models.ForeignKey(
         "Restaurant", on_delete=models.SET_NULL,
@@ -252,6 +277,7 @@ class Item(BaseModel):
     category = models.ForeignKey(
         Category, on_delete=models.SET_NULL, null=True, blank=True, related_name="items"
     )
+    item_image = models.ImageField(upload_to='item_images/', null=True, blank=True)
     item_name = models.CharField(max_length=100)
     master_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
@@ -433,10 +459,10 @@ class Order(BaseModel):
         ('delivery', 'Delivery'),
     ]
     restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE)
+    customer = models.ForeignKey(Customer, on_delete=models.CASCADE)
     item_name = models.CharField(max_length=50)
     Qty = models.IntegerField(default=1)
     price = models.DecimalField(max_digits=10, decimal_places=2)
-    kot = models.IntegerField(default=1)
     order_time = models.DateTimeField(auto_now_add=True)
     total_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     payment_mode = models.CharField(max_length=20, choices=PAYMENT_MODE_CHOICES)
@@ -444,3 +470,108 @@ class Order(BaseModel):
     Paid = models.BooleanField(default=False)
     loyalty = models.BooleanField(default=False)
     loyalty_points = models.IntegerField(default=0)
+
+# class Customer(BaseModel):
+#     customer_name = models.CharField(max_length=150, null=True, blank=True)
+#     number = models.CharField(max_length=15, blank=False)
+#     address = models.CharField(max_length=255, blank=False)
+#     locality = models.CharField(max_length=100, blank=True)
+#     loyalty_points = models.IntegerField(default=0)
+
+#     def __str__(self):
+#         return f"Customer {self.customer_name}"
+class KOT(BaseModel):
+    restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE)
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="Restaurant_kot_order")
+    kot_number = models.IntegerField(default=1)
+    customer = models.ForeignKey(Customer, on_delete=models.CASCADE)
+    time = models.DateTimeField(auto_now_add=True)
+    items = models.ManyToManyField(Order, related_name="Restaurant_kot_items")
+    qty = models.IntegerField(default=1)
+    order_type = models.CharField(max_length=20, choices=Order.ORDER_TYPE_CHOICES)
+    table_number = models.CharField(max_length=20, null=True, blank=True)
+# -------------------- billing ---------------------
+class Billing(BaseModel):
+    restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE)
+    customer = models.ForeignKey(Customer, on_delete=models.CASCADE)
+    order = models.ForeignKey(Order, on_delete=models.CASCADE)
+    subtotal_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    tax = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    service_charge = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    discount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    order_type = models.CharField(max_length=20, choices=Order.ORDER_TYPE_CHOICES)
+    payment_mode = models.CharField(max_length=20, choices=Order.PAYMENT_MODE_CHOICES)
+    billing_time = models.DateTimeField(auto_now_add=True) 
+    
+# ------------------- Signals: create Item for new Cuisine under Restaurant ------------------
+@receiver(post_save, sender=Cuisine)
+def create_items_for_new_cuisine(sender, instance, created, **kwargs):
+    if created:
+        restaurant = instance.restaurant
+        master_cuisine = instance.master_cuisine  # ye MasterCuisine object hai
+
+        # is master cuisine ke saare master items lo
+        master_items = MasterItem.objects.filter(master_cuisine=master_cuisine)
+
+        for master_item in master_items:
+            # Agar item pehle se nahi hai to hi create karo
+            exists = Item.objects.filter(
+                restaurant=restaurant,
+                master_item=master_item
+            ).exists()
+            if not exists:
+                Item.objects.create(
+                    restaurant=restaurant,
+                    cuisine=instance,   # ye Restaurant ke Cuisine object hai
+                    master_item=master_item,
+                    item_name=master_item.name,
+                    master_price=0,
+                    price=0,
+                    description="not set",
+                    item_type=master_item.item_type,
+                )
+
+@receiver(post_save, sender=tablebookingfloor)
+def ensure_tables_for_floor(sender, instance, created, **kwargs):
+    """
+    Ensure that for a given tablebookingfloor there exist exactly `no_of_tables`
+    Table records (create missing; attempt to remove extra unbooked ones).
+    """
+    # use the DB alias used when saving the instance (works with multi-db)
+    db = getattr(instance._state, "db", None) or "default"
+
+    from django.db.models import Count
+
+    desired = int(instance.no_of_tables or 0)
+    manager = Table.objects.using(db)
+    current_qs = manager.filter(floor=instance)
+    current_count = current_qs.count()
+
+    # create missing tables
+    if desired > current_count:
+        to_create = desired - current_count
+        objs = []
+        for _ in range(to_create):
+            objs.append(Table(restaurant=instance.restaurant, floor=instance, status="available"))
+        if objs:
+            manager.bulk_create(objs)
+
+    # remove extra tables if possible (only remove tables with no bookings)
+    elif desired < current_count:
+        to_remove = current_count - desired
+        # Annotate booking count and pick tables with zero bookings first
+        candidates = (
+            manager
+            .filter(floor=instance)
+            .annotate(booking_count=Count("tablebookinglog"))
+            .filter(booking_count=0)
+            .order_by("-created_at")
+        )
+        removable = list(candidates[:to_remove])
+        if removable:
+            # delete within transaction
+            with transaction.atomic(using=db):
+                ids = [t.id for t in removable]
+                manager.filter(id__in=ids).delete()
+        # If not enough removable unbooked tables, keep existing booked tables to avoid data loss.

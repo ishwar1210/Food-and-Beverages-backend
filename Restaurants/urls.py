@@ -25,6 +25,9 @@ from .views import (
     
     # Utility Views
     RegisterDBByClientAPIView, RegisterTenantDatabaseView, RestaurantWeeklyScheduleView,
+
+    # New ViewSets
+    TableBookingFloorViewSet, TableViewSet, TableBookingLogViewSet, KOTViewSet, BillingViewSet,
 )
 
 # Router registration
@@ -64,6 +67,13 @@ router.register(r'menu-images', RestoMenuImageViewSet, basename='menu-image')
 router.register(r'gallery-images', RestoGalleryImageViewSet, basename='gallery-image')
 router.register(r'other-files', RestoOtherFileViewSet, basename='other-file')  
 
+# New endpoints
+router.register(r'tablebookingfloors', TableBookingFloorViewSet, basename="tablebookingfloor")
+router.register(r'tables', TableViewSet, basename="table")
+router.register(r'tablebookinglogs', TableBookingLogViewSet, basename="tablebookinglog")
+router.register(r'kots', KOTViewSet, basename="kot")
+router.register(r'billings', BillingViewSet, basename="billing")
+
 urlpatterns = [
     # Tenant database registration
     path('register-db/', RegisterDBByClientAPIView.as_view(), name='register-db-client'),
@@ -77,4 +87,4 @@ urlpatterns = [
 
     # Include all router URLs
     path('', include(router.urls)),
-] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT) 
+] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

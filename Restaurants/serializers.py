@@ -5,7 +5,7 @@ from .models import (
     Restaurant, RestaurantSchedule, Blocked_Day, TableBooking, OrderConfigure, MasterCuisine, MasterItem,
     Cuisine, Category, Item, Customer, RestoCoverImage, RestoMenuImage,
     RestoGalleryImage, RestoOtherFile, Ingredient, QtyIngredient,
-    Supplier, Warehouse, InventoryItem, InventoryMovement, InventoryAudit, Order
+    Supplier, Warehouse, InventoryItem, InventoryMovement, InventoryAudit, Order , tablebookingfloor, Table, TableBookingLog, KOT, Billing
 )
 
 class AliasContextMixin:
@@ -198,6 +198,28 @@ class CuisineSerializer(AliasModelSerializer):
         fields = "__all__"
         read_only_fields = ["id"]
 
+    def create(self, validated_data):
+        cuisine = Cuisine.objects.using(self.alias).create(**validated_data)
+
+        # Auto-create Items from MasterItems
+        master_items = MasterItem.objects.using(self.alias).filter(master_cuisine=cuisine.master_cuisine)
+        items_to_create = []
+        for mi in master_items:
+            items_to_create.append(
+                Item(
+                    restaurant=cuisine.restaurant,
+                    cuisine=cuisine,
+                    master_item=mi,
+                    item_name=mi.name,
+                    master_price=0,  # optional, can map if you have pricing
+                    price=0,         # default until restaurant sets price
+                    item_type=mi.item_type,
+                )
+            )
+
+        Item.objects.using(self.alias).bulk_create(items_to_create)
+
+        return cuisine
 
 class CategorySerializer(AliasModelSerializer):
     class Meta:
@@ -503,3 +525,41 @@ class CuisineNestedSerializer(AliasModelSerializer):
     class Meta:
         model = Cuisine
         fields = ["id", "name", "categories"]
+
+# ============= Table Booking Serializers =============
+
+class TableBookingFloorSerializer(AliasModelSerializer):
+    class Meta:
+        model = tablebookingfloor
+        fields = "__all__"
+        read_only_fields = ["id"]
+
+
+class TableSerializer(AliasModelSerializer):
+    class Meta:
+        model = Table
+        fields = "__all__"
+        read_only_fields = ["id"]
+
+
+class TableBookingLogSerializer(AliasModelSerializer):
+    class Meta:
+        model = TableBookingLog
+        fields = "__all__"
+        read_only_fields = ["id"]
+
+
+# ============= KOT & Billing Serializers =============
+
+class KOTSerializer(AliasModelSerializer):
+    class Meta:
+        model = KOT
+        fields = "__all__"
+        read_only_fields = ["id", "time"]
+
+
+class BillingSerializer(AliasModelSerializer):
+    class Meta:
+        model = Billing
+        fields = "__all__"
+        read_only_fields = ["id", "billing_time"]
