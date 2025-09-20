@@ -5,7 +5,7 @@ from .models import (
     Restaurant, RestaurantSchedule, Blocked_Day, TableBooking, OrderConfigure, MasterCuisine, MasterItem,
     Cuisine, Category, Item, Customer, RestoCoverImage, RestoMenuImage,
     RestoGalleryImage, RestoOtherFile, Ingredient, QtyIngredient,
-    Supplier, Warehouse, InventoryItem, InventoryMovement, InventoryAudit, Order , tablebookingfloor, Table, TableBookingLog, KOT, Billing
+    Supplier, Warehouse, InventoryItem, InventoryMovement, InventoryAudit, OrderItem, Order, tablebookingfloor, Table, TableBookingLog, KOT, Billing
 )
 
 class AliasContextMixin:
@@ -441,24 +441,71 @@ class InventoryMovementSerializer(AliasModelSerializer):
         return obj
 
 # ================= Order Management Serializers =================
+class OrderItemSerializer(AliasModelSerializer):
+    class Meta:
+        model = OrderItem
+        fields = ["id", "item_name", "quantity", "price"]
+        read_only_fields = ["id"]
+
+    def create(self, validated_data):
+        # Ensure OrderItem is saved in the correct tenant DB
+        obj = OrderItem(**validated_data)
+        obj.full_clean(validate_unique=False)
+        obj.save(using=self.alias)
+        return obj
+
 
 class OrderSerializer(AliasModelSerializer):
     restaurant = serializers.PrimaryKeyRelatedField(queryset=Restaurant.objects.none())
+    customer = serializers.PrimaryKeyRelatedField(queryset=Customer.objects.none())
+    items = OrderItemSerializer(many=True)
 
     class Meta:
         model = Order
-        fields = '__all__'
-        read_only_fields = ['id', 'order_time']
+        fields = "__all__"
+        read_only_fields = ["id", "order_time", "total_price"]
+        extra_kwargs = {
+            # allow client to send subtotal but we'll recompute server-side
+            "subtotal": {"required": False}
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["restaurant"].queryset = Restaurant.objects.using(self.alias).all()
+        self.fields["customer"].queryset = Customer.objects.using(self.alias).all()
 
     def create(self, validated_data):
-        obj = Order(**validated_data)
-        obj.full_clean(validate_unique=False)
-        obj.save(using=self.alias)
-        return obj
+        items_data = validated_data.pop("items", [])
+
+        # Create order in tenant DB
+        order = Order(**validated_data)
+        order.full_clean(validate_unique=False)
+        order.save(using=self.alias)
+
+        # Create OrderItem rows and attach
+        created_items = []
+        subtotal = 0
+        for item in items_data:
+            oi = OrderItem(
+                item_name=item.get("item_name"),
+                quantity=item.get("quantity", 1),
+                price=item.get("price", 0),
+            )
+            oi.full_clean(validate_unique=False)
+            oi.save(using=self.alias)
+            created_items.append(oi)
+            subtotal += (oi.price or 0) * (oi.quantity or 0)
+
+        if created_items:
+            order.items.add(*created_items)
+
+        # Compute totals
+        order.subtotal = subtotal
+        order.total_price = subtotal  # extend with taxes/charges if needed
+        order.save(using=self.alias)
+
+        return order
+
 
 # ================= List Serializers (for detailed views) =================
 

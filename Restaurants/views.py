@@ -34,7 +34,7 @@ from .models import (
     Restaurant, RestaurantSchedule, Blocked_Day, TableBooking, OrderConfigure, MasterCuisine, MasterItem,
     Cuisine, Category, Item, Customer, RestoCoverImage, RestoMenuImage,
     RestoGalleryImage, RestoOtherFile,  Ingredient, QtyIngredient,
-    Supplier, Warehouse, InventoryItem, InventoryMovement, InventoryAudit, Order, tablebookingfloor, Table, 
+    Supplier, Warehouse, InventoryItem, InventoryMovement, InventoryAudit, OrderItem, Order, tablebookingfloor, Table,
     TableBookingLog, KOT, Billing
 )
 from .serializers import (
@@ -43,7 +43,7 @@ from .serializers import (
     CategorySerializer,  ItemSerializer, CustomerSerializer, RestoCoverImageSerializer,
     RestoMenuImageSerializer, RestoGalleryImageSerializer, RestoOtherFileSerializer,
     IngredientSerializer, QtyIngredientSerializer, SupplierSerializer, WarehouseSerializer,
-    InventoryItemSerializer, InventoryMovementSerializer, OrderSerializer,
+    InventoryItemSerializer, InventoryMovementSerializer, OrderItemSerializer, OrderSerializer,
     RestaurantListSerializer, ItemListSerializer , RestaurantScheduleBulkSerializer, CuisineNestedSerializer,
     TableBookingFloorSerializer , TableSerializer, TableBookingLogSerializer, KOTSerializer, BillingSerializer
 )
@@ -629,6 +629,29 @@ class CustomerViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _T
 # -------------------------------------------------------------------
 # Order Management ViewSets
 # -------------------------------------------------------------------
+class OrderItemViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _TenantDBMixin, viewsets.ModelViewSet):
+    serializer_class = OrderItemSerializer
+    permission_classes = [permissions.AllowAny]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ["item_name", "price"]
+    search_fields = ["item_name"]
+    ordering_fields = ["price", "quantity"]
+    ordering = ["item_name"]
+
+    queryset = OrderItem.objects.none()
+
+    def get_queryset(self):
+        alias = self._alias()
+        return OrderItem.objects.using(alias).all()
+
+    def create(self, request, *args, **kwargs):
+        alias = self._alias()
+        s = self.get_serializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        with transaction.atomic(using=alias):
+            obj = s.save()
+        s.instance = obj
+        return Response(s.data, status=status.HTTP_201_CREATED)
 
 class OrderViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _TenantDBMixin, viewsets.ModelViewSet):
     serializer_class = OrderSerializer
@@ -636,8 +659,8 @@ class OrderViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _Tena
     permission_classes = [permissions.AllowAny]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['restaurant', 'Paid', 'order_type']
-    search_fields = ['customer_name', 'customer_phone']
-    ordering_fields = ['order_time', 'total_amount']
+    search_fields = ['customer__customer_name', 'customer__number']
+    ordering_fields = ['order_time', 'total_price', 'subtotal']
     ordering = ['-order_time']
     
     queryset = Order.objects.none()
@@ -651,9 +674,7 @@ class OrderViewSet(RouterTenantContextMixin, TenantSerializerContextMixin, _Tena
         s = self.get_serializer(data=request.data)
         s.is_valid(raise_exception=True)
         with transaction.atomic(using=alias):
-            obj = Order(**s.validated_data)
-            obj.full_clean(validate_unique=False)
-            obj.save(using=alias)
+            obj = s.save()
         s.instance = obj
         return Response(s.data, status=status.HTTP_201_CREATED)
 

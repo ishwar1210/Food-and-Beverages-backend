@@ -11,7 +11,7 @@ from .views import (
     MasterCuisineViewSet, MasterItemViewSet, CuisineViewSet, CategoryViewSet,  ItemViewSet,
 
     # Customer & Order ViewSets
-    CustomerViewSet, OrderViewSet,
+    CustomerViewSet, OrderViewSet, OrderItemViewSet,
 
     # Inventory Management ViewSets
     SupplierViewSet, WarehouseViewSet, InventoryItemViewSet, InventoryMovementViewSet,
@@ -49,6 +49,7 @@ router.register(r'items', ItemViewSet, basename='item')
 
 # Customer & Order endpoints
 router.register(r'customers', CustomerViewSet, basename='customer')
+router.register(r'order-items', OrderItemViewSet, basename='order-item')
 router.register(r'orders', OrderViewSet, basename='order')
 
 # Inventory Management endpoints

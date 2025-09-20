@@ -52,6 +52,7 @@ class Customer(BaseModel):
     address = models.CharField(max_length=255, blank=False)
     locality = models.CharField(max_length=100, blank=True)
     loyalty_points = models.IntegerField(default=0)
+    restaurant = models.ForeignKey("Restaurant", on_delete=models.CASCADE, related_name="customers")
 
     def __str__(self):
         return f"Customer {self.customer_name}"
@@ -445,6 +446,15 @@ def _apply_movement_to_item(sender, instance: InventoryMovement, created, **kwar
 
 # ------------------- orders -------------------
 
+class OrderItem(BaseModel):
+    item_name = models.CharField(max_length=100)
+    quantity = models.PositiveIntegerField(default=1)
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+
+    def __str__(self):
+        return f"{self.item_name} (x{self.quantity}) - {self.price}"  
+
+
 class Order(BaseModel):
     PAYMENT_MODE_CHOICES = [
         ('cash', 'Cash'),
@@ -458,12 +468,12 @@ class Order(BaseModel):
         ('Pick_Up', 'Pick Up'),
         ('delivery', 'Delivery'),
     ]
+
     restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE)
     customer = models.ForeignKey(Customer, on_delete=models.CASCADE)
-    item_name = models.CharField(max_length=50)
-    Qty = models.IntegerField(default=1)
-    price = models.DecimalField(max_digits=10, decimal_places=2)
+    items = models.ManyToManyField(OrderItem, related_name="orders")
     order_time = models.DateTimeField(auto_now_add=True)
+    subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     total_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     payment_mode = models.CharField(max_length=20, choices=PAYMENT_MODE_CHOICES)
     order_type = models.CharField(max_length=20, choices=ORDER_TYPE_CHOICES)
@@ -471,15 +481,14 @@ class Order(BaseModel):
     loyalty = models.BooleanField(default=False)
     loyalty_points = models.IntegerField(default=0)
 
-# class Customer(BaseModel):
-#     customer_name = models.CharField(max_length=150, null=True, blank=True)
-#     number = models.CharField(max_length=15, blank=False)
-#     address = models.CharField(max_length=255, blank=False)
-#     locality = models.CharField(max_length=100, blank=True)
-#     loyalty_points = models.IntegerField(default=0)
+    def calculate_total_price(self):
+        self.total_price = sum(item.price * item.quantity for item in self.items.all())
+        self.save()
 
-#     def __str__(self):
-#         return f"Customer {self.customer_name}"
+    def __str__(self):
+        return f"Order #{self.id} - {self.customer}"
+
+
 class KOT(BaseModel):
     restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE)
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="Restaurant_kot_order")
